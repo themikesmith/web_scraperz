@@ -1,0 +1,24 @@
+# packages in environment at /home/mcs/Programs/anaconda/envs/web_scraperz:
+#
+beautifulsoup             3.2.1                     <pip>
+billiard                  3.3.0.20                  <pip>
+celery                    3.1.18                    <pip>
+click                     5.1                       <pip>
+decorator                 4.0.2                     <pip>
+geocoder                  1.5.3                     <pip>
+htmlparser                0.0.2                     <pip>
+oauthlib                  0.7.2                     <pip>
+openssl                   1.0.1k                        1  
+pip                       7.1.0                    py27_1  
+python                    2.7.10                        0  
+ratelim                   0.1.6                     <pip>
+readline                  6.2                           2  
+requests                  2.7.0                     <pip>
+requests-oauthlib         0.5.0                     <pip>
+setuptools                18.1                     py27_0  
+six                       1.9.0                     <pip>
+sqlite                    3.8.4.1                       1  
+system                    5.8                           2  
+tk                        8.5.18                        0  
+wheel                     0.24.0                   py27_0  
+zlib                      1.2.8                         0  
