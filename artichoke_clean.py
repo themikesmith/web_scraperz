@@ -1,15 +1,21 @@
 # from datetime import datetime
-import requests, re, geocoder
+import requests
+import re
+import geocoder
 from BeautifulSoup import BeautifulSoup
 from HTMLParser import HTMLParser
 
+
 h = HTMLParser()
 
-class CraigslistScraper():
+
+class CraigslistScraper:
     def __init__(self, base):
         if base == 'baltimore':
             self.base = 'http://baltimore.craigslist.org'
-    def _getInfoFromCLPosting(self, url, ):
+
+    @staticmethod
+    def _get_info_from_clp_posting(url):
         posting = {}
         r = requests.get(url)
         soup = BeautifulSoup(h.unescape(r.text))
@@ -23,11 +29,11 @@ class CraigslistScraper():
         except:
             pass
         try:
-            posting['price'] = soup.find(text=re.compile('.*compensation.*')).parent.findChild('b').text.replace('$','')
+            posting['price'] = soup.find(text=re.compile('.*compensation.*')).parent.findChild('b').text.replace('$', '')
         except:
             pass
         try:
-            posting['text'] = soup.find('section', {'id':'postingbody'}).text
+            posting['text'] = soup.find('section', {'id': 'postingbody'}).text
         except:
             pass
         try:
@@ -40,18 +46,18 @@ class CraigslistScraper():
             pass
         return posting
 
-    def _cleanPostUrl(self, url):
+    def _clean_post_url(self, url):
         if url[:2] == '//':
             return 'http:'+url
         elif url[0] == '/':
-            return self.base  + url
+            return self.base + url
         return url
 
-    def getPostings(self, query, pages = 1):
+    def get_postings(self, query, pages=1):
         posts = []
         # temporary variable to store all of the posting data
-        for i in range(1,pages + 1):
-            r = requests.get(self.base + '/search/ggg?query=%s&sort=date?s=%d'%(query, pages*100))
+        for i in range(1, pages + 1):
+            r = requests.get(self.base + '/search/ggg?query=%s&sort=date?s=%d' % (query, pages*100))
             soup = BeautifulSoup(r.text)
-            posts += [self._cleanPostUrl(a['href']) for a in soup.findAll('a', {'data-id':re.compile('\d+')})]
-        return [self._getInfoFromCLPosting(post) for post in posts]
+            posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
+        return [CraigslistScraper._get_info_from_clp_posting(post) for post in posts]
