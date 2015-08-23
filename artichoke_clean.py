@@ -9,6 +9,49 @@ from HTMLParser import HTMLParser
 h = HTMLParser()
 
 
+class PostingScraper:
+    """
+    Interface for scrapers for posting websites.
+    Implements "get postings" from a 'base url' construct
+    """
+    def __init__(self, base):
+        """
+        initialize the scraper with a base url
+        """
+        self.base = base
+
+    def _clean_post_url(self, url):
+        """
+        Cleans the url:
+        - makes the scheme values uniform
+        - adds the base url to any local urls
+        :param url: the url to clean
+        :return: the cleaned url
+        """
+        if url[:2] == '//':
+            return 'http:'+url
+        elif url[0] == '/':
+            return self.base + url
+        return url
+
+    def get_postings(self, query, pages=1):
+        """
+        Gather results, given a query and the number of pages of results desired.
+        A posting is a dict with the following attributes:
+            - url
+            - price
+            - location: state, city, country
+            - text
+            - unique id
+            - date created
+        Will be different for each website (duh)
+        :param query: query to use on the site
+        :param pages: number of pages of results desired
+        :return: a list of postings, each of which is a dict.
+        """
+        raise NotImplementedError("Should have implemented this")
+
+
 class CraigslistScraper:
     def __init__(self, base):
         if base == 'baltimore':
@@ -45,13 +88,6 @@ class CraigslistScraper:
         except:
             pass
         return posting
-
-    def _clean_post_url(self, url):
-        if url[:2] == '//':
-            return 'http:'+url
-        elif url[0] == '/':
-            return self.base + url
-        return url
 
     def get_postings(self, query, pages=1):
         posts = []
