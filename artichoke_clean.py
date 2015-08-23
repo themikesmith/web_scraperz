@@ -88,10 +88,18 @@ class CraigslistScraper(PostingScraper):
         return posting
 
     def get_postings(self, query, pages=1):
-        posts = []
-        # temporary variable to store all of the posting data
+        posts = []  # temporary variable to store all of the posting data
         for i in range(1, pages + 1):
             r = requests.get(self.base + '/search/ggg?query=%s&sort=date?s=%d' % (query, pages*100))
             soup = BeautifulSoup(r.text)
             posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
-        return [CraigslistScraper._get_info_from_clp_posting(post) for post in posts]
+        return [self._get_info_from_clp_posting(post) for post in posts]
+
+class UpworkScraper(PostingScraper):
+
+    def _get_info_from_upwork_posting(self, post):
+        posting = {}
+        return posting
+
+    def get_postings(self, query, pages=1):
+        pass
