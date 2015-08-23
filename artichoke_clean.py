@@ -6,9 +6,6 @@ from BeautifulSoup import BeautifulSoup
 from HTMLParser import HTMLParser
 
 
-h = HTMLParser()
-
-
 class PostingScraper:
     """
     Interface for scrapers for posting websites.
@@ -19,6 +16,7 @@ class PostingScraper:
         initialize the scraper with a base url
         """
         self.base = base
+        self.html_parser = HTMLParser()
 
     def _clean_post_url(self, url):
         """
@@ -52,16 +50,16 @@ class PostingScraper:
         raise NotImplementedError("Should have implemented this")
 
 
-class CraigslistScraper:
+class CraigslistScraper(PostingScraper):
     def __init__(self, base):
+        PostingScraper.__init__(base)
         if base == 'baltimore':
             self.base = 'http://baltimore.craigslist.org'
 
-    @staticmethod
-    def _get_info_from_clp_posting(url):
+    def _get_info_from_clp_posting(self, url):
         posting = {}
         r = requests.get(url)
-        soup = BeautifulSoup(h.unescape(r.text))
+        soup = BeautifulSoup(self.html_parser.unescape(r.text))
         posting['url'] = url
         try:
             loc = soup.find(href=re.compile("google.com/maps"))['href']
