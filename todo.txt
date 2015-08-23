@@ -1,0 +1,1 @@
+upwork scraper get arbitrary number of recent listings by query get location price, description, date-created  hourly  python inheritance
