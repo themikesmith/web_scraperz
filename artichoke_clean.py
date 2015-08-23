@@ -1,4 +1,4 @@
-from datetime import datetime
+# from datetime import datetime
 import requests, re, geocoder
 from BeautifulSoup import BeautifulSoup
 from HTMLParser import HTMLParser
@@ -55,5 +55,3 @@ class CraigslistScraper():
             soup = BeautifulSoup(r.text)
             posts += [self._cleanPostUrl(a['href']) for a in soup.findAll('a', {'data-id':re.compile('\d+')})]
         return [self._getInfoFromCLPosting(post) for post in posts]
-            
-          
