@@ -1,7 +1,13 @@
 from urllib import quote_plus
 import re
 import geocoder
-from super_soup import get_cleaned_soup_from_url
+from super_requests import get_html_from_url
+from BeautifulSoup import BeautifulSoup, Comment
+from HTMLParser import HTMLParser
+
+
+
+html_parser = HTMLParser()
 
 
 class PostingScraper:
@@ -28,6 +34,25 @@ class PostingScraper:
         elif url[0] == '/':
             return self.base + url
         return url
+
+    @staticmethod
+    def _get_cleaned_soup_from_url(url, dynamic=False, id_to_wait_for=None):
+        """
+        Wrapper for getting html from url, parse as BeautifulSoup, extract comments
+        :param url: the url to request
+        :param dynamic: True if URL contains dynamic content, false otherwise
+        :param id_to_wait_for: an ID of an object on the page to wait for loading, used if dynamic
+        :return: the resulting BeautifulSoup object
+        """
+        try:
+            text = get_html_from_url(url, dynamic=dynamic, id_to_wait_for=id_to_wait_for)
+        except ValueError:  # TODO: how handle if site times out or refuses connection?
+            text = ""  # just set blank if we can't get it for now.
+        soup = BeautifulSoup(html_parser.unescape(text))
+        # get rid of all HTML comments, as they show up in soup's .text results
+        comments = soup.findAll(text=lambda x: isinstance(x, Comment))
+        [comment.extract() for comment in comments]
+        return soup
 
     def get_postings(self, query, pages=1):
         """
@@ -56,7 +81,7 @@ class CraigslistScraper(PostingScraper):
     @staticmethod
     def _get_info_from_clp_posting(url):
         posting = {}
-        soup = get_cleaned_soup_from_url(url)
+        soup = PostingScraper._get_cleaned_soup_from_url(url)
         posting['url'] = url
         try:
             loc = soup.find(href=re.compile("google.com/maps"))['href']
@@ -89,7 +114,7 @@ class CraigslistScraper(PostingScraper):
         posts = []  # temporary variable to store all of the posting data
         for i in range(1, pages + 1):
             search_url = self.base + '/search/ggg?query=%s&sort=date?s=%d' % (query, pages*100)
-            soup = get_cleaned_soup_from_url(search_url)
+            soup = PostingScraper._get_cleaned_soup_from_url(search_url)
             posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
         return [CraigslistScraper._get_info_from_clp_posting(post) for post in posts]
 
@@ -108,9 +133,9 @@ class UpworkScraper(PostingScraper):
         :return: the data in a dict
         """
         # commented out old versions for reference
-        # soup = self._get_cleaned_soup_from_url(profile_url, dynamic=True, id_to_wait_for='oProfilePage')
-        soup = get_cleaned_soup_from_url(profile_url, dynamic=True)
-        # soup = self._get_cleaned_soup_from_url(profile_url)
+        # soup = PostingScraper._get_cleaned_soup_from_url(profile_url, dynamic=True, id_to_wait_for='oProfilePage')
+        soup = PostingScraper._get_cleaned_soup_from_url(profile_url, dynamic=True)
+        # soup = PostingScraper._get_cleaned_soup_from_url(profile_url)
 
         # url
         posting = dict(url=profile_url)
@@ -144,7 +169,7 @@ class UpworkScraper(PostingScraper):
         # http://www.upwork.com/o/profiles/browse/?q=massage%20therapist
         for i in range(1, pages + 1):
             search_url = self.base + "/o/profiles/browse/?page=%d&q=%s" % (i, query)
-            soup = get_cleaned_soup_from_url(search_url, dynamic=False)
+            soup = PostingScraper._get_cleaned_soup_from_url(search_url, dynamic=False)
             # this url returns a list of postings of profiles. visit each profile
             for article in soup.findAll('article'):  # get all 'article'
                 # profile link is a link with class="jsShortName"
@@ -155,4 +180,5 @@ class UpworkScraper(PostingScraper):
 
 if __name__ == "__main__":
     u = UpworkScraper()
-    print u.get_postings("massage therapist")
+    for p in u.get_postings("massage therapist"):
+        print p
