@@ -180,9 +180,9 @@ class UpworkScraper(PostingScraper):
 
 
 if __name__ == "__main__":
-    # u = UpworkScraper()
-    # for p in u.get_postings("massage therapist"):
-    #     print p
+    u = UpworkScraper()
+    for p in u.get_postings("massage therapist"):
+        print p
     c = CraigslistScraper(base='baltimore')
     for p in c.get_postings("massage therapist"):
         print p
