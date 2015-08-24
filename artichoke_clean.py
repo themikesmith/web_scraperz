@@ -39,6 +39,15 @@ class PostingScraper:
         return url
 
     def _get_cleaned_soup_from_url(self, url, dynamic=False, id_to_wait_for=None):
+        """
+        Given a url, whether it has dynamic content or not,
+        and if it does have dynamic content, an ID to wait for loading,
+        make the request, process the HTML into BeautifulSoup, return
+        :param url: the url to request
+        :param dynamic: True if URL contains dynamic content, false otherwise
+        :param id_to_wait_for: an ID of an object on the page to wait for loading, used if dynamic
+        :return: the resulting BeautifulSoup object
+        """
         if not dynamic:
             r = requests.get(url)
             text = r.text
@@ -138,10 +147,15 @@ class UpworkScraper(PostingScraper):
         self._query_profile_link_class = "jsShortName"
 
     def _get_info_from_upwork_posting(self, profile_url):
+        """
+        Given an Upwork profile URL, extract the desired information and return as a dict
+        :param profile_url: the profile URL
+        :return: the data in a dict
+        """
+        # commented out old versions for reference
         # soup = self._get_cleaned_soup_from_url(profile_url, dynamic=True, id_to_wait_for='oProfilePage')
         soup = self._get_cleaned_soup_from_url(profile_url, dynamic=True)
         # soup = self._get_cleaned_soup_from_url(profile_url)
-        # print soup
 
         # url
         posting = dict(url=profile_url)
@@ -161,7 +175,6 @@ class UpworkScraper(PostingScraper):
         # skills
         skills = soup.find('up-skills-public-viewer')
         try:
-            # re.sub(r"Search for other freelancers with this skill.", '', x.text)
             posting['skills'] = map(lambda x: x.text, skills.findAll('a'))
         except AttributeError:  # handle if soup finds nothing
             pass
