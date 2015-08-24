@@ -6,7 +6,6 @@ from BeautifulSoup import BeautifulSoup, Comment
 from HTMLParser import HTMLParser
 
 
-
 html_parser = HTMLParser()
 
 
