@@ -75,7 +75,7 @@ class PostingScraper:
 class CraigslistScraper(PostingScraper):
     def __init__(self, base):
         if base == 'baltimore':
-            self.base = 'http://baltimore.craigslist.org'
+            base = 'http://baltimore.craigslist.org'
         PostingScraper.__init__(self, base)
 
     @staticmethod
@@ -116,6 +116,7 @@ class CraigslistScraper(PostingScraper):
             search_url = self.base + '/search/ggg?query=%s&sort=date?s=%d' % (query, pages*100)
             soup = PostingScraper._get_cleaned_soup_from_url(search_url)
             posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
+        print posts
         return [CraigslistScraper._get_info_from_clp_posting(post) for post in posts]
 
 
@@ -173,12 +174,15 @@ class UpworkScraper(PostingScraper):
             # this url returns a list of postings of profiles. visit each profile
             for article in soup.findAll('article'):  # get all 'article'
                 # profile link is a link with class="jsShortName"
-                urls = article.findAll('a', {"class": self._query_profile_link_class})
+                urls = article.findAll('a', attrs={"class": self._query_profile_link_class})
                 posts += map(lambda a: self._clean_post_url(a['href']), urls)
         return map(UpworkScraper._get_info_from_upwork_posting, posts)
 
 
 if __name__ == "__main__":
-    u = UpworkScraper()
-    for p in u.get_postings("massage therapist"):
+    # u = UpworkScraper()
+    # for p in u.get_postings("massage therapist"):
+    #     print p
+    c = CraigslistScraper(base='baltimore')
+    for p in c.get_postings("massage therapist"):
         print p
