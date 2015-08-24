@@ -1,4 +1,4 @@
-import urllib
+from urllib import quote_plus
 import re
 import geocoder
 from super_soup import get_cleaned_soup_from_url
@@ -85,7 +85,7 @@ class CraigslistScraper(PostingScraper):
         return posting
 
     def get_postings(self, query, pages=1):
-        query = urllib.quote_plus(query)  # don't use urlencode, some sites depend on argument order
+        query = quote_plus(query)  # don't use urlencode, some sites depend on argument order
         posts = []  # temporary variable to store all of the posting data
         for i in range(1, pages + 1):
             search_url = self.base + '/search/ggg?query=%s&sort=date?s=%d' % (query, pages*100)
@@ -138,7 +138,7 @@ class UpworkScraper(PostingScraper):
         return posting
 
     def get_postings(self, query, pages=1):
-        query = urllib.quote_plus(query)  # don't use urlencode, some sites depend on argument order
+        query = quote_plus(query)  # don't use urlencode, some sites depend on argument order
         posts = []
         # example url:
         # http://www.upwork.com/o/profiles/browse/?q=massage%20therapist
