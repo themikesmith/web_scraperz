@@ -1,4 +1,5 @@
 from urllib import quote_plus
+from urlparse import urlsplit, urlunsplit
 import re
 import geocoder
 from super_requests import get_html_from_url
@@ -8,18 +9,20 @@ from dateutil import parser as dt_parser
 
 
 class PostingScraper:
-
-    _html_parser = HTMLParser()
-
     """
     Interface for scrapers for posting websites.
     Implements "get postings" from a 'base url' construct
     """
+
+    _html_parser = HTMLParser()
+
     def __init__(self, base):
         """
-        initialize the scraper with a base url
+        initialize the scraper with a base url, and a source
         """
-        self.base = base
+        r = urlsplit(base)
+        self.scheme = r.scheme
+        self.source = r.netloc
 
     @staticmethod
     def _encode_unicode(s):
@@ -33,11 +36,12 @@ class PostingScraper:
         :param url: the url to clean
         :return: the cleaned url
         """
-        if url[:2] == '//':
-            return 'http:'+url
-        elif url[0] == '/':
-            return self.base + url
-        return url
+        split_url = list(urlsplit(url))
+        split_url[0] = self.scheme
+        if not split_url[1]:
+            split_url[1] = self.source
+        split_url = tuple(split_url)
+        return urlunsplit(split_url)
 
     @staticmethod
     def _get_cleaned_soup_from_html(html):
@@ -89,8 +93,7 @@ class CraigslistScraper(PostingScraper):
             base = 'http://baltimore.craigslist.org'
         PostingScraper.__init__(self, base)
 
-    @staticmethod
-    def _get_info_from_clp_posting(url):
+    def _get_info_from_clp_posting(self, url):
         posting = {}
         soup = PostingScraper._get_cleaned_soup_from_url(url)
         posting['url'] = url
@@ -118,17 +121,19 @@ class CraigslistScraper(PostingScraper):
             posting['unique_id'] = 'clgig'+re.match('[^\d]*(\d+).html', url).group(1)
         except:
             pass
+        posting['source'] = self.source
         return posting
 
     def get_postings(self, query, pages=1):
         query = quote_plus(query)  # don't use urlencode, some sites depend on argument order
         posts = []  # temporary variable to store all of the posting data
         for i in range(1, pages + 1):
-            search_url = self.base + '/search/ggg?query=%s&sort=date?s=%d' % (query, pages*100)
+            search_url = urlunsplit((self.scheme, self.source, "/search/ggg",
+                                     "query=%s&sort=date?s=%d" % (query, pages*100), ""))
             soup = PostingScraper._get_cleaned_soup_from_url(search_url)
             posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
             # posts += [self._clean_post_url(a['href']) for a in soup.find_all('a', {'data-id': re.compile('\d+')})]
-        return [CraigslistScraper._get_info_from_clp_posting(post) for post in posts]
+        return [self._get_info_from_clp_posting(post) for post in posts]
 
 
 class UpworkScraper(PostingScraper):
@@ -156,6 +161,11 @@ class UpworkScraper(PostingScraper):
         url = posting_soup.find('meta', attrs=UpworkScraper._job_url_attrs)
         if url is not None:
             posting['url'] = self._clean_post_url(url['content'])
+            url_parts = urlsplit(posting['url'])
+            if url_parts.path:
+                sections = url_parts.path.rsplit('/')
+                [sections.remove(s) for s in sections if not s]
+                posting['unique_id'] = sections[-1]
         container = posting_soup.find(attrs=UpworkScraper._job_container_attrs)
         # date posted
         date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
@@ -191,7 +201,7 @@ class UpworkScraper(PostingScraper):
         except AttributeError:  # handle if soup finds nothing for skills
             pass
         # unique id
-        # date created
+        posting['source'] = self.source
         return posting
 
     def get_postings(self, query, pages=1):
@@ -200,7 +210,7 @@ class UpworkScraper(PostingScraper):
         # example url:
         # https://www.upwork.com/o/jobs/browse/?q=therapist
         for i in range(1, pages + 1):
-            search_url = self.base + "/o/jobs/browse/?page=%d&q=%s" % (i, query)
+            search_url = urlunsplit((self.scheme, self.source, "/o/jobs/browse/", "page=%d&q=%s" % (i, query), ""))
             soup = PostingScraper._get_cleaned_soup_from_url(search_url)
             # print soup
             # this url returns a list of postings of profiles. visit each profile
@@ -216,7 +226,7 @@ if __name__ == "__main__":
     for p in u.get_postings("therapist"):
         for k, v in p.items():
             print k, ": ", v
-    c = CraigslistScraper(base='baltimore')
-    for p in c.get_postings("massage therapist"):
-        for k, v in p.items():
-            print k, ": ", v
+    # c = CraigslistScraper(base='baltimore')
+    # for p in c.get_postings("massage therapist"):
+    #     for k, v in p.items():
+    #         print k, ": ", v
