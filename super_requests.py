@@ -3,7 +3,6 @@ __author__ = 'mcs'
 import requests
 from time import sleep
 from pyvirtualdisplay import Display
-# from contextlib import closing
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException
