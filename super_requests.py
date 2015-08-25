@@ -17,6 +17,13 @@ def _sleep_retry_print_helper(num_secs):
     sleep(num_secs)
 
 
+def _safe_browser_close(browser):
+    try:
+        browser.close()
+    except socket_error:
+        pass
+
+
 def get_html_from_url(url, dynamic=False, id_to_wait_for=None):
     """
     Given a url, whether it has dynamic content or not,
@@ -58,7 +65,7 @@ def get_html_from_url(url, dynamic=False, id_to_wait_for=None):
                     # sleep(1)  # add this in to avoid overtaxing servers
                     break  # ... if we get what we want
                 except TimeoutException:  # if we get a timeout in webdriverwait, try again in 5 seconds
-                    browser.close()
+                    _safe_browser_close(browser)
                     _sleep_retry_print_helper(5)  # retry
                 except socket_error as s:
                     # https://stackoverflow.com/questions/14425401/catch-socket-error-errno-111-connection-refused-exception
@@ -66,7 +73,7 @@ def get_html_from_url(url, dynamic=False, id_to_wait_for=None):
                     if s.errno != errno.ECONNREFUSED:
                         raise s  # re-raise if it isn't connection refused
                     else:  # if it is, try again in 5 seconds
-                        browser.close()
+                        _safe_browser_close(browser)
                         _sleep_retry_print_helper(5)  # retry
         display.stop()
     if text is None:

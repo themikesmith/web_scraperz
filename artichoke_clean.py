@@ -6,10 +6,10 @@ from BeautifulSoup import BeautifulSoup, Comment
 from HTMLParser import HTMLParser
 
 
-html_parser = HTMLParser()
-
-
 class PostingScraper:
+
+    _html_parser = HTMLParser()
+
     """
     Interface for scrapers for posting websites.
     Implements "get postings" from a 'base url' construct
@@ -35,6 +35,17 @@ class PostingScraper:
         return url
 
     @staticmethod
+    def _get_cleaned_soup_from_html(html):
+        # html = html.encode("utf8")
+        soup = BeautifulSoup(PostingScraper._html_parser.unescape(html))
+        # soup = BeautifulSoup(html, "html.parser")
+        # get rid of all HTML comments, as they show up in soup's .text results
+        comments = soup.findAll(text=lambda x: isinstance(x, Comment))
+        # comments = soup.find_all(text=lambda x: isinstance(x, Comment))
+        [comment.extract() for comment in comments]
+        return soup
+
+    @staticmethod
     def _get_cleaned_soup_from_url(url, dynamic=False, id_to_wait_for=None):
         """
         Wrapper for getting html from url, parse as BeautifulSoup, extract comments
@@ -47,11 +58,7 @@ class PostingScraper:
             text = get_html_from_url(url, dynamic=dynamic, id_to_wait_for=id_to_wait_for)
         except ValueError:  # TODO: how handle if site times out or refuses connection?
             text = ""  # just set blank if we can't get it for now.
-        soup = BeautifulSoup(html_parser.unescape(text))
-        # get rid of all HTML comments, as they show up in soup's .text results
-        comments = soup.findAll(text=lambda x: isinstance(x, Comment))
-        [comment.extract() for comment in comments]
-        return soup
+        return PostingScraper._get_cleaned_soup_from_html(text)
 
     def get_postings(self, query, pages=1):
         """
@@ -115,48 +122,55 @@ class CraigslistScraper(PostingScraper):
             search_url = self.base + '/search/ggg?query=%s&sort=date?s=%d' % (query, pages*100)
             soup = PostingScraper._get_cleaned_soup_from_url(search_url)
             posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
-        print posts
+            # posts += [self._clean_post_url(a['href']) for a in soup.find_all('a', {'data-id': re.compile('\d+')})]
         return [CraigslistScraper._get_info_from_clp_posting(post) for post in posts]
 
 
 class UpworkScraper(PostingScraper):
+
+    _job_link_attrs = {"class": "break", "itemprop": "url"}
+    _job_dateposted_attrs = {"itemprop": "datePosted"}
+    _job_description_attrs = {"class": "description"}
+    _job_skills_span_attrs = {"class": "js-skills skills"}
+    _job_skill_tag_attrs = {"class": "o-tag-skill"}
+    _job_price_div_attrs = {"class": "o-support-info m-sm-bottom m-sm-top"}
+    _job_price_div_throwaway_attrs = {"class": "js-posted"}
+
     def __init__(self):
         PostingScraper.__init__(self, "http://www.upwork.com")
         # in query results, a profile link is a link with class="jsShortName"
-        self._query_profile_link_class = "jsShortName"
 
-    @staticmethod
-    def _get_info_from_upwork_posting(profile_url):
+    def _get_info_from_upwork_posting(self, article_soup):
         """
-        Given an Upwork profile URL, extract the desired information and return as a dict
-        :param profile_url: the profile URL
+        Given an Upwork article HTML object, extract the desired information and return as a dict
+        :param article_soup: the Soup-ed HTML
         :return: the data in a dict
         """
-        # commented out old versions for reference
-        # soup = PostingScraper._get_cleaned_soup_from_url(profile_url, dynamic=True, id_to_wait_for='oProfilePage')
-        soup = PostingScraper._get_cleaned_soup_from_url(profile_url, dynamic=True)
-        # soup = PostingScraper._get_cleaned_soup_from_url(profile_url)
-
+        posting = {}
         # url
-        posting = dict(url=profile_url)
+        url = article_soup.find(attrs=UpworkScraper._job_link_attrs)
+        if url is not None:
+            posting['url'] = self._clean_post_url(url['href'])
+        # date posted
+        date_posted = article_soup.find(attrs=UpworkScraper._job_dateposted_attrs)
+        posting['date_created'] = date_posted['datetime']
         # price
-        posting['prices'] = map(lambda x: x.text, soup.findAll('span', attrs={"itemprop": "pricerange"}))
-        # location: city, state, country
-        posting['locations'] = []
-        locations = map(lambda x: x.text, soup.findAll('h3', attrs={"itemprop": "address"}))
-        for loc in locations:
-            g = geocoder.google(loc)
-            posting['locations'].append({"city": g.city, "state": g.state, "country": g.country})
+        price_div = article_soup.find(attrs=UpworkScraper._job_price_div_attrs)
+        try:
+            [x.extract() for x in price_div.findAll(attrs=UpworkScraper._job_price_div_throwaway_attrs)]
+            posting['price_info'] = price_div.text
+        except AttributeError:
+            pass
         # text
         try:
-            posting['description'] = soup.find('p', attrs={"itemprop": "description"}).text
+            posting['description'] = article_soup.find('div', attrs=UpworkScraper._job_description_attrs).text
         except AttributeError:  # handle if soup finds nothing
             pass
         # skills
-        skills = soup.find('up-skills-public-viewer')
+        skills = article_soup.find(attrs=UpworkScraper._job_skills_span_attrs)
         try:
-            posting['skills'] = map(lambda x: x.text, skills.findAll('a'))
-        except AttributeError:  # handle if soup finds nothing
+            posting['skills'] = map(lambda x: x.text, skills.findAll('a', attrs=UpworkScraper._job_skill_tag_attrs))
+        except AttributeError:  # handle if soup finds nothing for skills
             pass
         # unique id
         # date created
@@ -166,21 +180,20 @@ class UpworkScraper(PostingScraper):
         query = quote_plus(query)  # don't use urlencode, some sites depend on argument order
         posts = []
         # example url:
-        # http://www.upwork.com/o/profiles/browse/?q=massage%20therapist
+        # https://www.upwork.com/o/jobs/browse/?q=therapist
         for i in range(1, pages + 1):
-            search_url = self.base + "/o/profiles/browse/?page=%d&q=%s" % (i, query)
-            soup = PostingScraper._get_cleaned_soup_from_url(search_url, dynamic=False)
+            search_url = self.base + "/o/jobs/browse/?page=%d&q=%s" % (i, query)
+            soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+            # print soup
             # this url returns a list of postings of profiles. visit each profile
             for article in soup.findAll('article'):  # get all 'article'
-                # profile link is a link with class="jsShortName"
-                urls = article.findAll('a', attrs={"class": self._query_profile_link_class})
-                posts += map(lambda a: self._clean_post_url(a['href']), urls)
-        return map(UpworkScraper._get_info_from_upwork_posting, posts)
+                posts += PostingScraper._get_cleaned_soup_from_html(str(article))
+        return map(self._get_info_from_upwork_posting, posts)
 
 
 if __name__ == "__main__":
     u = UpworkScraper()
-    for p in u.get_postings("massage therapist"):
+    for p in u.get_postings("therapist"):
         print p
     c = CraigslistScraper(base='baltimore')
     for p in c.get_postings("massage therapist"):
