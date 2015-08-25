@@ -186,7 +186,8 @@ class UpworkScraper(PostingScraper):
             pass
         # skills
         try:
-            posting['skills'] = map(lambda x: PostingScraper._encode_unicode(x.text), container.findAll('a', attrs=UpworkScraper._job_skill_tag_attrs))
+            posting['skills'] = map(lambda x: PostingScraper._encode_unicode(x.text),
+                                    container.findAll('a', attrs=UpworkScraper._job_skill_tag_attrs))
         except AttributeError:  # handle if soup finds nothing for skills
             pass
         # unique id
@@ -213,9 +214,9 @@ class UpworkScraper(PostingScraper):
 if __name__ == "__main__":
     u = UpworkScraper()
     for p in u.get_postings("therapist"):
-        for k,v in p.items():
+        for k, v in p.items():
             print k, ": ", v
     c = CraigslistScraper(base='baltimore')
     for p in c.get_postings("massage therapist"):
-        for k,v in p.items():
+        for k, v in p.items():
             print k, ": ", v
