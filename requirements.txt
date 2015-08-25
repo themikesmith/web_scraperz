@@ -10,6 +10,7 @@ geocoder==1.5.3
 HTMLParser==0.0.2
 kombu==3.0.26
 oauthlib==1.0.3
+python-dateutil==2.4.2
 pytz==2015.4
 PyVirtualDisplay==0.1.5
 ratelim==0.1.6

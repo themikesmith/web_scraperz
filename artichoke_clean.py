@@ -4,6 +4,7 @@ import geocoder
 from super_requests import get_html_from_url
 from BeautifulSoup import BeautifulSoup, Comment
 from HTMLParser import HTMLParser
+from dateutil import parser as dt_parser
 
 
 class PostingScraper:
@@ -19,6 +20,10 @@ class PostingScraper:
         initialize the scraper with a base url
         """
         self.base = base
+
+    @staticmethod
+    def _encode_unicode(s):
+        return s.encode('utf8')
 
     def _clean_post_url(self, url):
         """
@@ -129,47 +134,62 @@ class CraigslistScraper(PostingScraper):
 class UpworkScraper(PostingScraper):
 
     _job_link_attrs = {"class": "break", "itemprop": "url"}
+    _job_url_attrs = {"property": "og:url"}
+    _job_container_attrs = {"class": "container", "itemtype": "http://schema.org/JobPosting"}
     _job_dateposted_attrs = {"itemprop": "datePosted"}
-    _job_description_attrs = {"class": "description"}
-    _job_skills_span_attrs = {"class": "js-skills skills"}
-    _job_skill_tag_attrs = {"class": "o-tag-skill"}
+    _job_descrip_aircard_attrs = {"class": "air-card-group"}
+    _job_skill_tag_attrs = {"class": re.compile("^o-tag-skill")}
     _job_price_div_attrs = {"class": "o-support-info m-sm-bottom m-sm-top"}
     _job_price_div_throwaway_attrs = {"class": "js-posted"}
+    _div_row_attrs = {'class': 'row'}
 
     def __init__(self):
         PostingScraper.__init__(self, "http://www.upwork.com")
         # in query results, a profile link is a link with class="jsShortName"
 
-    def _get_info_from_upwork_posting(self, article_soup):
+    def _get_info_from_upwork_posting(self, posting_soup):
         """
         Given an Upwork article HTML object, extract the desired information and return as a dict
-        :param article_soup: the Soup-ed HTML
+        :param posting_soup: the Soup-ed HTML
         :return: the data in a dict
         """
         posting = {}
         # url
-        url = article_soup.find(attrs=UpworkScraper._job_link_attrs)
+        url = posting_soup.find('meta', attrs=UpworkScraper._job_url_attrs)
         if url is not None:
-            posting['url'] = self._clean_post_url(url['href'])
+            posting['url'] = self._clean_post_url(url['content'])
+        container = posting_soup.find(attrs=UpworkScraper._job_container_attrs)
         # date posted
-        date_posted = article_soup.find(attrs=UpworkScraper._job_dateposted_attrs)
-        posting['date_created'] = date_posted['datetime']
-        # price
-        price_div = article_soup.find(attrs=UpworkScraper._job_price_div_attrs)
+        date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
         try:
-            [x.extract() for x in price_div.findAll(attrs=UpworkScraper._job_price_div_throwaway_attrs)]
-            posting['price_info'] = price_div.text
-        except AttributeError:
+            posting['date_created'] = dt_parser.parse(date_posted_span['popover'])
+        except KeyError:  # thrown if no 'popover' attribute
+            pass
+        # price
+        # print str(container)
+        # second row of container, first element, first row inside that
+        try:
+            second_row = container.findAll('div', attrs=UpworkScraper._div_row_attrs)[1]
+            try:
+                first_child = second_row.find('div')
+                price_row = first_child.find('div', attrs=UpworkScraper._div_row_attrs)
+                try:
+                    posting['price_info'] = PostingScraper._encode_unicode(price_row.text)
+                except AttributeError:  # thrown if price_row is None
+                    pass
+            except IndexError:  # thrown if second_row doesn't have a first_child
+                pass
+        except IndexError:  # thrown if container doesn't have a second 'row' tag
             pass
         # text
         try:
-            posting['description'] = article_soup.find('div', attrs=UpworkScraper._job_description_attrs).text
+            description_air_card = container.find('div', attrs=UpworkScraper._job_descrip_aircard_attrs)
+            posting['description'] = PostingScraper._encode_unicode(description_air_card.find('p').text)
         except AttributeError:  # handle if soup finds nothing
             pass
         # skills
-        skills = article_soup.find(attrs=UpworkScraper._job_skills_span_attrs)
         try:
-            posting['skills'] = map(lambda x: x.text, skills.findAll('a', attrs=UpworkScraper._job_skill_tag_attrs))
+            posting['skills'] = map(lambda x: PostingScraper._encode_unicode(x.text), container.findAll('a', attrs=UpworkScraper._job_skill_tag_attrs))
         except AttributeError:  # handle if soup finds nothing for skills
             pass
         # unique id
@@ -187,14 +207,18 @@ class UpworkScraper(PostingScraper):
             # print soup
             # this url returns a list of postings of profiles. visit each profile
             for article in soup.findAll('article'):  # get all 'article'
-                posts += PostingScraper._get_cleaned_soup_from_html(str(article))
-        return map(self._get_info_from_upwork_posting, posts)
+                url = article.find('a', attrs=UpworkScraper._job_link_attrs)
+                posts.append(self._clean_post_url(url['href']))
+        return map(self._get_info_from_upwork_posting,
+                   map(PostingScraper._get_cleaned_soup_from_url, posts))
 
 
 if __name__ == "__main__":
     u = UpworkScraper()
     for p in u.get_postings("therapist"):
-        print p
+        for k,v in p.items():
+            print k, ": ", v
     c = CraigslistScraper(base='baltimore')
     for p in c.get_postings("massage therapist"):
-        print p
+        for k,v in p.items():
+            print k, ": ", v
