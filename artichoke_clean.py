@@ -133,14 +133,12 @@ class CraigslistScraper(PostingScraper):
 
 class UpworkScraper(PostingScraper):
 
-    _job_link_attrs = {"class": "break", "itemprop": "url"}
+    _job_search_result_link_attrs = {"class": "break", "itemprop": "url"}
     _job_url_attrs = {"property": "og:url"}
     _job_container_attrs = {"class": "container", "itemtype": "http://schema.org/JobPosting"}
     _job_dateposted_attrs = {"itemprop": "datePosted"}
     _job_descrip_aircard_attrs = {"class": "air-card-group"}
     _job_skill_tag_attrs = {"class": re.compile("^o-tag-skill")}
-    _job_price_div_attrs = {"class": "o-support-info m-sm-bottom m-sm-top"}
-    _job_price_div_throwaway_attrs = {"class": "js-posted"}
     _div_row_attrs = {'class': 'row'}
 
     def __init__(self):
@@ -161,12 +159,11 @@ class UpworkScraper(PostingScraper):
         container = posting_soup.find(attrs=UpworkScraper._job_container_attrs)
         # date posted
         date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
-        try:
+        try:  # it's in the 'popover' attribute
             posting['date_created'] = dt_parser.parse(date_posted_span['popover'])
         except KeyError:  # thrown if no 'popover' attribute
             pass
         # price
-        # print str(container)
         # second row of container, first element, first row inside that
         try:
             second_row = container.findAll('div', attrs=UpworkScraper._div_row_attrs)[1]
@@ -207,7 +204,7 @@ class UpworkScraper(PostingScraper):
             # print soup
             # this url returns a list of postings of profiles. visit each profile
             for article in soup.findAll('article'):  # get all 'article'
-                url = article.find('a', attrs=UpworkScraper._job_link_attrs)
+                url = article.find('a', attrs=UpworkScraper._job_search_result_link_attrs)
                 posts.append(self._clean_post_url(url['href']))
         return map(self._get_info_from_upwork_posting,
                    map(PostingScraper._get_cleaned_soup_from_url, posts))
