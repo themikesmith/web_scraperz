@@ -6,6 +6,7 @@ from super_requests import get_html_from_url
 from BeautifulSoup import BeautifulSoup, Comment
 from HTMLParser import HTMLParser
 from dateutil import parser as dt_parser
+from sys import stderr
 
 
 class PostingScraper:
@@ -148,7 +149,6 @@ class UpworkScraper(PostingScraper):
 
     def __init__(self):
         PostingScraper.__init__(self, "http://www.upwork.com")
-        # in query results, a profile link is a link with class="jsShortName"
 
     def _get_info_from_upwork_posting(self, posting_soup):
         """
@@ -157,51 +157,55 @@ class UpworkScraper(PostingScraper):
         :return: the data in a dict
         """
         posting = {}
-        # url
-        url = posting_soup.find('meta', attrs=UpworkScraper._job_url_attrs)
-        if url is not None:
-            posting['url'] = self._clean_post_url(url['content'])
-            url_parts = urlsplit(posting['url'])
-            if url_parts.path:
-                sections = url_parts.path.rsplit('/')
-                [sections.remove(s) for s in sections if not s]
-                posting['unique_id'] = sections[-1]
-        container = posting_soup.find(attrs=UpworkScraper._job_container_attrs)
-        # date posted
-        date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
-        try:  # it's in the 'popover' attribute
-            posting['date_created'] = dt_parser.parse(date_posted_span['popover'])
-        except KeyError:  # thrown if no 'popover' attribute
-            pass
-        # price
-        # second row of container, first element, first row inside that
         try:
-            second_row = container.findAll('div', attrs=UpworkScraper._div_row_attrs)[1]
-            try:
-                first_child = second_row.find('div')
-                price_row = first_child.find('div', attrs=UpworkScraper._div_row_attrs)
-                try:
-                    posting['price_info'] = PostingScraper._encode_unicode(price_row.text)
-                except AttributeError:  # thrown if price_row is None
-                    pass
-            except IndexError:  # thrown if second_row doesn't have a first_child
+            # url
+            url = posting_soup.find('meta', attrs=UpworkScraper._job_url_attrs)
+            if url is not None:
+                posting['url'] = self._clean_post_url(url['content'])
+                url_parts = urlsplit(posting['url'])
+                if url_parts.path:
+                    sections = url_parts.path.rsplit('/')
+                    [sections.remove(s) for s in sections if not s]
+                    posting['unique_id'] = sections[-1]
+            container = posting_soup.find(attrs=UpworkScraper._job_container_attrs)
+            # date posted
+            date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
+            try:  # it's in the 'popover' attribute
+                posting['date_created'] = dt_parser.parse(date_posted_span['popover'])
+            except KeyError:  # thrown if no 'popover' attribute
                 pass
-        except IndexError:  # thrown if container doesn't have a second 'row' tag
+            # price
+            # second row of container, first element, first row inside that
+            try:
+                second_row = container.findAll('div', attrs=UpworkScraper._div_row_attrs)[1]
+                try:
+                    first_child = second_row.find('div')
+                    price_row = first_child.find('div', attrs=UpworkScraper._div_row_attrs)
+                    try:
+                        posting['price_info'] = PostingScraper._encode_unicode(price_row.text)
+                    except AttributeError:  # thrown if price_row is None
+                        pass
+                except IndexError:  # thrown if second_row doesn't have a first_child
+                    pass
+            except IndexError:  # thrown if container doesn't have a second 'row' tag
+                pass
+            # text
+            try:
+                description_air_card = container.find('div', attrs=UpworkScraper._job_descrip_aircard_attrs)
+                posting['description'] = PostingScraper._encode_unicode(description_air_card.find('p').text)
+            except AttributeError:  # handle if soup finds nothing
+                pass
+            # skills
+            try:
+                posting['skills'] = map(lambda x: PostingScraper._encode_unicode(x.text),
+                                        container.findAll('a', attrs=UpworkScraper._job_skill_tag_attrs))
+            except AttributeError:  # handle if soup finds nothing for skills
+                pass
+            # unique id
+            posting['source'] = self.source
+        except Exception as e:
+            print stderr, e
             pass
-        # text
-        try:
-            description_air_card = container.find('div', attrs=UpworkScraper._job_descrip_aircard_attrs)
-            posting['description'] = PostingScraper._encode_unicode(description_air_card.find('p').text)
-        except AttributeError:  # handle if soup finds nothing
-            pass
-        # skills
-        try:
-            posting['skills'] = map(lambda x: PostingScraper._encode_unicode(x.text),
-                                    container.findAll('a', attrs=UpworkScraper._job_skill_tag_attrs))
-        except AttributeError:  # handle if soup finds nothing for skills
-            pass
-        # unique id
-        posting['source'] = self.source
         return posting
 
     def get_postings(self, query, pages=1):
@@ -221,12 +225,48 @@ class UpworkScraper(PostingScraper):
                    map(PostingScraper._get_cleaned_soup_from_url, posts))
 
 
+class GuruScraper(PostingScraper):
+
+    _job_search_results_list_attr = {"class": "services", "id": "serviceList"}
+    _job_search_result_list_item_attrs = {"class": re.compile(r"^serviceItem")}
+    _job_search_results_header_attrs = {"class": "servTitle"}
+
+    def __init__(self):
+        PostingScraper.__init__(self, "http://www.guru.com")
+
+    def _get_info_from_guru_job_page_soup(self, job_page_soup):
+        posting = {}
+        try:
+        except Exception as e:
+            print >> stderr, e
+            pass
+        return posting
+
+
+    def get_postings(self, query, pages=1):
+        postings = []
+        query = re.sub(' ', '-', query)  # funny syntax for guru website
+        query = quote_plus(query)
+        search_url = urlunsplit((self.scheme, self.source, "d/jobs/q/%s/" % query, "", ""))
+        soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+        services_list = soup.find(attrs=GuruScraper._job_search_results_list_attr)
+        for i, li in enumerate(services_list.findAll('li', attrs=GuruScraper._job_search_result_list_item_attrs)):
+            h2 = li.find('h2', attrs=GuruScraper._job_search_results_header_attrs)
+            a = h2.find('a')
+            postings.append(self._clean_post_url(a['href']))
+        return map(self._get_info_from_guru_job_page_soup,
+            map(PostingScraper._get_cleaned_soup_from_url, postings))
+
+
 if __name__ == "__main__":
-    u = UpworkScraper()
-    for p in u.get_postings("therapist"):
-        for k, v in p.items():
-            print k, ": ", v
+    # u = UpworkScraper()
+    # for p in u.get_postings("therapist"):
+    #     for k, v in p.items():
+    #         print k, ": ", v
     # c = CraigslistScraper(base='baltimore')
     # for p in c.get_postings("massage therapist"):
     #     for k, v in p.items():
     #         print k, ": ", v
+    g = GuruScraper()
+    for p in g.get_postings("computer thing"):
+        print p
