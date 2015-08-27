@@ -100,6 +100,7 @@ class UpworkScraper(posting_scraper.PostingScraper):
 
 def main(args):
     query = ' '.join(args) if args else 'therapist'
+    print 'searching for query "%s"' % query
     u = UpworkScraper()
     postings = u.get_postings(query)
     for p in postings:
@@ -107,4 +108,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main(sys.argv[1:])

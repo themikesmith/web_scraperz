@@ -1,5 +1,6 @@
 from urllib import quote_plus
 from urlparse import urlunsplit
+import pprint
 import re
 import sys
 
@@ -41,10 +42,11 @@ class GuruScraper(posting_scraper.PostingScraper):
 
 def main(args):
     query = " ".join(args) if args else 'computer thing'
+    print 'searching for query "%s"' % query
     g = GuruScraper()
     for p in g.get_postings(query):
-        print p
+        pprint.pprint(p)
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main(sys.argv[1:])

@@ -1,6 +1,7 @@
 from urllib import quote_plus
 from urlparse import urlunsplit
 import re
+import sys
 import geocoder
 
 import posting_scraper
@@ -59,8 +60,14 @@ class CraigslistScraper(posting_scraper.PostingScraper):
         return [self._get_info_from_clp_posting(post) for post in posts]
 
 
-if __name__ == "__main__":
+def main(args):
+    query = ' '.join(args) if args else 'massage therapist'
+    print 'searching for query "%s"' % query
     c = CraigslistScraper(base='baltimore')
     for p in c.get_postings("massage therapist"):
         for k, v in p.items():
             print k, ": ", v
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
