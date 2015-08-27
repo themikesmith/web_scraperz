@@ -320,16 +320,34 @@ class GuruScraper(PostingScraper):
             return []
 
 
+class ElanceScraper(PostingScraper):
+    def __init__(self):
+        PostingScraper.__init__(self, "http://www.elance.com")
+
+    def get_postings(self, query, pages=1):
+        # https://www.elance.com/browse-jobs -- base
+        # example query: https://www.elance.com/r/jobs/q-computer%20thing%20%21/
+        # ex two: https://www.elance.com/r/jobs/q-computer
+        # three: https://www.elance.com/r/jobs/q-computer%20thing
+        postings = []
+        query = quote_plus(query)
+        try:
+            search_url = urlunsplit((self.scheme, self.source, "r/jobs/q-%s" % query, "", ""))
+            print search_url
+            return postings
+        except Exception:
+            # traceback.print_exc(file=stderr)
+            return []
+
+
 if __name__ == "__main__":
-    # u = UpworkScraper()
-    # for p in u.get_postings("therapist"):
-    #     for k, v in p.items():
-    #         print k, ": ", v
-    # c = CraigslistScraper(base='baltimore')
-    # for p in c.get_postings("massage therapist"):
-    #     for k, v in p.items():
-    #         print k, ": ", v
-    g = GuruScraper()
-    for p in g.get_postings("computer thing"):
-        for k, v in p.items():
-            print k, " => ", v
+    scrapers = list()
+    # scrapers.append(UpworkScraper())
+    # scrapers.append(CraigslistScraper(base='baltimore'))
+    # scrapers.append(GuruScraper())
+    scrapers.append(ElanceScraper())
+    for scraper in scrapers:
+        for p in scraper.get_postings("computer thing"):
+            for k, v in p.items():
+                print k, " => ", v
+
