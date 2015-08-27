@@ -41,7 +41,8 @@ class PostingScraper(object):
 
     @staticmethod
     def _get_cleaned_soup_from_html(html):
-        html = unicode(html, "utf-8")
+        # Unicode in py2 is awful, y'all want to switch to python 3?
+        # html = unicode(html, "utf-8")
         soup = BeautifulSoup(PostingScraper._html_parser.unescape(html))
         # soup = BeautifulSoup(html, "html.parser")
         # get rid of all HTML comments, as they show up in soup's .text results
