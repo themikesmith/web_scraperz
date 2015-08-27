@@ -1,7 +1,9 @@
+from dateutil import parser as dt_parser
+import pprint
+import re
+import sys
 from urllib import quote_plus
 from urlparse import urlsplit, urlunsplit
-import re
-from dateutil import parser as dt_parser
 
 import posting_scraper
 
@@ -96,13 +98,13 @@ class UpworkScraper(posting_scraper.PostingScraper):
                    map(self._get_cleaned_soup_from_url, posts))
 
 
+def main(args):
+    query = ' '.join(args) if args else 'therapist'
+    u = UpworkScraper()
+    postings = u.get_postings(query)
+    for p in postings:
+        pprint.pprint(p)
+
+
 if __name__ == "__main__":
-    pass
-    # u = UpworkScraper()
-    # for p in u.get_postings("therapist"):
-    #     for k, v in p.items():
-    #         print k, ": ", v
-    # c = CraigslistScraper(base='baltimore')
-    # for p in c.get_postings("massage therapist"):
-    #     for k, v in p.items():
-    #         print k, ": ", v
+    main(sys.argv)
