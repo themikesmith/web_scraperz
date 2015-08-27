@@ -1,2 +1,8 @@
 *.pyc
 .idea
+/bin/*
+/include/*
+/lib/*
+/local/*
+/selenium/*
+pip-selfcheck.json
