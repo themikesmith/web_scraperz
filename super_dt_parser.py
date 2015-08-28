@@ -2,7 +2,6 @@ __author__ = 'mcs'
 from dateutil import parser as dt_parser
 from dateutil.tz import tzoffset
 from datetime import datetime, timedelta
-from sys import stderr
 import re
 
 
@@ -36,7 +35,8 @@ def safe_dt_parse(dt):
         # if dt can't be 'read', or if unknown string format
         raise e
     try:
-        print >> stderr, d
+        # print >> stderr, "verifying tz:", d
+        str(d)
     except ValueError:  # if the object can be created but not printed
         # throws this weird tz bug, remove tz info
         # https://bugs.python.org/issue13556
