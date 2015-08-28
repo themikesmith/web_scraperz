@@ -350,4 +350,3 @@ if __name__ == "__main__":
         for p in scraper.get_postings("computer thing"):
             for k, v in p.items():
                 print k, " => ", v
-
