@@ -5,8 +5,8 @@ import geocoder
 from super_requests import get_html_from_url
 from BeautifulSoup import BeautifulSoup, Comment
 from HTMLParser import HTMLParser
-# from sys import stderr
-# import traceback
+from sys import stderr
+import traceback
 from super_dt_parser import safe_dt_parse
 
 
@@ -176,7 +176,7 @@ class UpworkScraper(PostingScraper):
         date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
         try:  # it's in the 'popover' attribute
             posting['date_created'] = safe_dt_parse(date_posted_span['popover'])
-        except KeyError:  # thrown if no 'popover' attribute
+        except (KeyError, AttributeError, ValueError):
             # traceback.print_exc(file=stderr)
             pass
         # price
@@ -266,7 +266,7 @@ class GuruScraper(PostingScraper):
         try:
             date_posted_span = posting_soup.find('span', attrs=GuruScraper._job_date_posted_span_attrs)
             posting['date_posted'] = safe_dt_parse(date_posted_span['data-date'])
-        except KeyError:
+        except (KeyError, AttributeError, ValueError):
             # traceback.print_exc(file=stderr)
             pass
         # duration
@@ -274,7 +274,7 @@ class GuruScraper(PostingScraper):
             duration_span = posting_soup.find('span', attrs=GuruScraper._job_duration_span_attrs)
             actual_date_span = duration_span.find('span')
             posting['duration'] = safe_dt_parse(actual_date_span['data-date'])
-        except AttributeError:
+        except (KeyError, AttributeError, ValueError):
             # traceback.print_exc(file=stderr)
             pass
         # budget
@@ -287,19 +287,22 @@ class GuruScraper(PostingScraper):
         # skills
         try:
             skills_section = posting_soup.find(attrs=GuruScraper._job_skill_section_attrs)
-            posting['skills'] = map(lambda x: PostingScraper._encode_unicode(PostingScraper._get_cleaned_soup_from_html(x).text), skills_section.find('a', attrs=GuruScraper._job_skill_link_attrs))
+            posting['skills'] = map(lambda x:
+                                    PostingScraper._encode_unicode(PostingScraper._get_cleaned_soup_from_html(x).text),
+                                    skills_section.find('a', attrs=GuruScraper._job_skill_link_attrs))
         except AttributeError:
             # traceback.print_exc(file=stderr)
             pass
         # experience, desription
         try:
             description_section = posting_soup.find(attrs=GuruScraper._job_experience_reqs_section_attrs)
-            posting['description'] = PostingScraper._encode_unicode(PostingScraper._get_cleaned_soup_from_html(str(description_section)).text)
+            posting['description'] = PostingScraper._encode_unicode(
+                PostingScraper._get_cleaned_soup_from_html(str(description_section)).text)
         except AttributeError:
             # traceback.print_exc(file=stderr)
             pass
+        posting['source'] = self.source
         return posting
-
 
     def get_postings(self, query, pages=1):
         postings = []
@@ -321,6 +324,13 @@ class GuruScraper(PostingScraper):
 
 
 class ElanceScraper(PostingScraper):
+    # api reference:
+    # https://www.elance.com/q/api2/getting-started
+
+    _job_search_results_div_attrs = {"id": "jobSearchResults"}
+    _job_result_card_div_attrs = {"class": re.compile(r"^jobCard")}
+    _job_card_url_attrs = {"class": "title"}
+
     def __init__(self):
         PostingScraper.__init__(self, "http://www.elance.com")
 
@@ -333,19 +343,97 @@ class ElanceScraper(PostingScraper):
         query = quote_plus(query)
         try:
             search_url = urlunsplit((self.scheme, self.source, "r/jobs/q-%s" % query, "", ""))
-            print search_url
+            soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+            print soup
+            job_search_results_div = soup.find('div', attrs=ElanceScraper._job_search_results_div_attrs)
+            for job_card_div in job_search_results_div.findAll('div', attrs=ElanceScraper._job_result_card_div_attrs):
+                url = job_card_div.find('a', attrs=ElanceScraper._job_card_url_attrs)
+                print url
+                postings.append(url)
+            print postings
             return postings
         except Exception:
+            traceback.print_exc(file=stderr)
+            return []
+
+
+class IndeedScraper(PostingScraper):
+    _job_results_col_attrs = {"id": "resultsCol"}
+    _job_row_result_div_attrs = {"class": re.compile(r"row.*result")}
+    _job_location_span_attrs = {"class": "location"}
+    _job_date_span_attrs = {"class": "date"}
+    _job_description_span_attrs = {"itemprop": "description"}
+
+    def __init__(self, location):
+        PostingScraper.__init__(self, "http://www.indeed.com")
+        self.location = location
+
+    def _get_info_from_indeed_result(self, row_result_soup):
+        posting = {}
+        # url, title
+        try:
+            url_data = row_result_soup.find('a')
+            posting['url'] = self._clean_post_url(url_data['href'])
+            posting['title'] = PostingScraper._encode_unicode(url_data.text)
+        except (AttributeError, KeyError):
+            pass
+        # id
+        try:
+            posting['unique_id'] = row_result_soup['data-jk']
+        except KeyError:
+            pass
+        # location
+        try:
+            loc = row_result_soup.find('span', IndeedScraper._job_location_span_attrs).text
+            if loc is not None:
+                g = geocoder.google(loc, method='reverse')
+                posting['location'] = (g.city, g.state, g.country)
+        except (AttributeError, Exception):
+            traceback.print_exc(file=stderr)
+            pass
+        # date posted logic
+        try:
+            date_posted_span = row_result_soup.find('span', attrs=IndeedScraper._job_date_span_attrs)
+            date_posted_text = PostingScraper._encode_unicode(date_posted_span.text).lower()
+            if date_posted_text == "just posted":
+                date_posted_text = 'now'
+            try:
+                posting['date_posted'] = safe_dt_parse(date_posted_text)  # also throws AttributeError
+            except (AttributeError, ValueError):
+                traceback.print_exc(file=stderr)
+                pass
+        except AttributeError:
             # traceback.print_exc(file=stderr)
+            pass
+        # description
+        try:
+            posting['description'] = PostingScraper._encode_unicode(
+                row_result_soup.find("span", IndeedScraper._job_description_span_attrs).text)
+        except AttributeError:
+            pass
+        posting['source'] = self.source
+        return posting
+
+    def get_postings(self, query, pages=1):
+        try:
+            query = quote_plus(query)
+            search_url = urlunsplit((self.scheme, self.source, "jobs",
+                                     "q=%s&l=%s&sort=date&start=%d" % (query, self.location, (pages-1)*10), ""))
+            soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+            job_results_td = soup.find('td', attrs=IndeedScraper._job_results_col_attrs)
+            return map(self._get_info_from_indeed_result, job_results_td.findAll('div', IndeedScraper._job_row_result_div_attrs))
+        except Exception:
+            traceback.print_exc(file=stderr)
             return []
 
 
 if __name__ == "__main__":
     scrapers = list()
-    scrapers.append(UpworkScraper())
-    scrapers.append(CraigslistScraper(base='baltimore'))
-    scrapers.append(GuruScraper())
+    # scrapers.append(UpworkScraper())
+    # scrapers.append(CraigslistScraper(base='baltimore'))
+    # scrapers.append(GuruScraper())
     # scrapers.append(ElanceScraper())
+    scrapers.append(IndeedScraper("baltimore"))
     for scraper in scrapers:
         print scraper
         for p in scraper.get_postings("computer thing"):
