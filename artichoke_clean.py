@@ -68,6 +68,7 @@ class PostingScraper:
         try:
             text = get_html_from_url(url, dynamic=dynamic, id_to_wait_for=id_to_wait_for)
         except ValueError:  # TODO: how handle if site times out or refuses connection?
+            traceback.print_exc(file=stderr)
             text = ""  # just set blank if we can't get it for now.
         return PostingScraper._get_cleaned_soup_from_html(text)
 
@@ -233,8 +234,8 @@ class UpworkScraper(PostingScraper):
             # https://www.upwork.com/o/jobs/browse/?q=therapist
             for i in range(1, pages + 1):
                 search_url = urlunsplit((self.scheme, self.source, "/o/jobs/browse/", "page=%d&q=%s" % (i, query), ""))
+                print >> stderr, search_url
                 soup = PostingScraper._get_cleaned_soup_from_url(search_url)
-                # print soup
                 # this url returns a list of postings of profiles. visit each profile
                 for article in soup.findAll('article'):  # get all 'article'
                     url = article.find('a', attrs=UpworkScraper._job_search_result_link_attrs)
@@ -327,17 +328,19 @@ class GuruScraper(PostingScraper):
         try:
             query = re.sub(' ', '-', query)  # funny syntax for guru website
             query = quote_plus(query)
-            search_url = urlunsplit((self.scheme, self.source, "d/jobs/q/%s/" % query, "", ""))
-            soup = PostingScraper._get_cleaned_soup_from_url(search_url)
-            services_list = soup.find(attrs=GuruScraper._job_search_results_list_attr)
-            for i, li in enumerate(services_list.findAll('li', attrs=GuruScraper._job_search_result_list_item_attrs)):
-                h2 = li.find('h2', attrs=GuruScraper._job_search_results_header_attrs)
-                a = h2.find('a')
-                postings.append(self._clean_post_url(a['href']))
+            for page_num in range(1, pages + 1):
+                search_url = urlunsplit((self.scheme, self.source, "d/jobs/q/%s/pg/%d" % (query, page_num), "", ""))
+                print >> stderr, search_url
+                soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+                services_list = soup.find(attrs=GuruScraper._job_search_results_list_attr)
+                for i, li in enumerate(services_list.findAll('li', attrs=GuruScraper._job_search_result_list_item_attrs)):
+                    h2 = li.find('h2', attrs=GuruScraper._job_search_results_header_attrs)
+                    a = h2.find('a')
+                    postings.append(self._clean_post_url(a['href']))
             return map(self._get_info_from_guru_job_page_soup,
                        map(PostingScraper._get_cleaned_soup_from_url, postings))
         except Exception:
-            # traceback.print_exc(file=stderr)
+            traceback.print_exc(file=stderr)
             return []
 
 
@@ -435,11 +438,15 @@ class IndeedScraper(PostingScraper):
     def get_postings(self, query, pages=1):
         try:
             query = quote_plus(query)
-            search_url = urlunsplit((self.scheme, self.source, "jobs",
-                                     "q=%s&l=%s&sort=date&start=%d" % (query, self.location, (pages-1)*10), ""))
-            soup = PostingScraper._get_cleaned_soup_from_url(search_url)
-            job_results_td = soup.find('td', attrs=IndeedScraper._job_results_col_attrs)
-            return map(self._get_info_from_indeed_result, job_results_td.findAll('div', IndeedScraper._job_row_result_div_attrs))
+            postings = []
+            for page_num in range(1, pages+1):
+                search_url = urlunsplit((self.scheme, self.source, "jobs",
+                                         "q=%s&l=%s&sort=date&start=%d" % (query, self.location, (page_num-1)*10), ""))
+                print >> stderr, search_url
+                soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+                job_results_td = soup.find('td', attrs=IndeedScraper._job_results_col_attrs)
+                postings.extend(job_results_td.findAll('div', IndeedScraper._job_row_result_div_attrs))
+            return map(self._get_info_from_indeed_result, postings)
         except Exception:
             # traceback.print_exc(file=stderr)
             return []
@@ -530,14 +537,40 @@ class SimplyhiredScraper(PostingScraper):
 
     def get_postings(self, query, pages=1):
         try:
+            postings = []
             query = quote_plus(query)
-            # https://www.simplyhired.com/search?q=massage+therapist&l=baltimore%2C+md&pn=2
-            search_url = urlunsplit((self.scheme, self.source, "search",
-                                     "q=%s&l=%s&pn=%d" % (query, quote_plus(self.location.lower()), pages), ""))
-            soup = PostingScraper._get_cleaned_soup_from_url(search_url)
-            job_results_list_div = soup.find('div', attrs=SimplyhiredScraper._job_results_list_div_attrs)
-            return map(self._get_info_from_simplyhired_result,
-                       job_results_list_div.findAll('div', SimplyhiredScraper._job_result_div_attrs))
+            for page_num in range(1, pages+1):
+                # https://www.simplyhired.com/search?q=massage+therapist&l=baltimore%2C+md&pn=2
+                search_url = urlunsplit((self.scheme, self.source, "search",
+                                         "q=%s&l=%s&pn=%d" % (query, quote_plus(self.location.lower()), page_num), ""))
+                print >> stderr, search_url
+                soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+                job_results_list_div = soup.find('div', attrs=SimplyhiredScraper._job_results_list_div_attrs)
+                postings.extend(job_results_list_div.findAll('div', SimplyhiredScraper._job_result_div_attrs))
+            return map(self._get_info_from_simplyhired_result, postings)
+        except Exception:
+            traceback.print_exc(file=stderr)
+            return []
+
+
+class GlassdoorScraper(PostingScraper):
+    def __init__(self):
+        PostingScraper.__init__(self, "http://www.glassdoor.com")
+
+    def get_postings(self, query, pages=1):
+        try:
+            query = quote_plus(query)
+            # initial url example: http://www.glassdoor.com/Job/jobs.htm?sc.keyword=lawn
+            for page_num in range(1, pages+1):
+                if pages == 1:
+                    initial_search_url = urlunsplit((self.scheme, self.source, "Job/jobs.htm",
+                                                     "sc.keyword=%s" % (query, quote_plus(self.location.lower()), pages), ""))
+                else:
+                    assert pages > 1
+            # changes, to eg http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4.htm
+            # and at pagination, http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4_IP2.htm
+            # replace _IP or _IP(page num).htm with _IP(next page num)
+            # or if _IP doesn't exist, add it
         except Exception:
             traceback.print_exc(file=stderr)
             return []
@@ -553,6 +586,7 @@ if __name__ == "__main__":
     # scrapers.append(ElanceScraper())
     for scraper in scrapers:
         print scraper
-        for p in scraper.get_postings("computer thing"):
+        for p in scraper.get_postings("computer thing", pages=2):
+            # print p['title']
             for k, v in p.items():
                 print k, " => ", v
