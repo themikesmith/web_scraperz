@@ -545,10 +545,10 @@ class SimplyhiredScraper(PostingScraper):
 if __name__ == "__main__":
     scrapers = list()
     scrapers.append(CraigslistScraper(base='baltimore'))
-    # scrapers.append(UpworkScraper())
-    # scrapers.append(GuruScraper())
-    # scrapers.append(IndeedScraper("baltimore"))
-    # scrapers.append(SimplyhiredScraper("Baltimore, MD"))
+    scrapers.append(UpworkScraper())
+    scrapers.append(GuruScraper())
+    scrapers.append(IndeedScraper("baltimore"))
+    scrapers.append(SimplyhiredScraper("Baltimore, MD"))
 
     # scrapers.append(ElanceScraper())
     for scraper in scrapers:
