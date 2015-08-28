@@ -108,11 +108,11 @@ class CraigslistScraper(PostingScraper):
         except:
             pass
         try:
-            posting['price'] = soup.find(text=re.compile('.*compensation.*')).parent.findChild('b').text.replace('$', '')
+            posting['price'] = PostingScraper._encode_unicode(soup.find(text=re.compile('.*compensation.*')).parent.findChild('b').text).replace('$', '')
         except:
             pass
         try:
-            posting['text'] = soup.find('section', {'id': 'postingbody'}).text
+            posting['text'] = PostingScraper._encode_unicode(soup.find('section', {'id': 'postingbody'}).text)
         except:
             pass
         try:
@@ -280,21 +280,21 @@ class GuruScraper(PostingScraper):
         # budget
         try:
             budget_div = posting_soup.find('div', attrs=GuruScraper._job_budget_div_attrs)
-            posting['budget'] = budget_div.text
+            posting['budget'] = PostingScraper._encode_unicode(budget_div.text)
         except AttributeError:
             # traceback.print_exc(file=stderr)
             pass
         # skills
         try:
             skills_section = posting_soup.find(attrs=GuruScraper._job_skill_section_attrs)
-            posting['skills'] = map(lambda x: PostingScraper._get_cleaned_soup_from_html(x).text, skills_section.find('a', attrs=GuruScraper._job_skill_link_attrs))
+            posting['skills'] = map(lambda x: PostingScraper._encode_unicode(PostingScraper._get_cleaned_soup_from_html(x).text), skills_section.find('a', attrs=GuruScraper._job_skill_link_attrs))
         except AttributeError:
             # traceback.print_exc(file=stderr)
             pass
         # experience, desription
         try:
             description_section = posting_soup.find(attrs=GuruScraper._job_experience_reqs_section_attrs)
-            posting['description'] = PostingScraper._get_cleaned_soup_from_html(str(description_section)).text
+            posting['description'] = PostingScraper._encode_unicode(PostingScraper._get_cleaned_soup_from_html(str(description_section)).text)
         except AttributeError:
             # traceback.print_exc(file=stderr)
             pass
@@ -342,11 +342,12 @@ class ElanceScraper(PostingScraper):
 
 if __name__ == "__main__":
     scrapers = list()
-    # scrapers.append(UpworkScraper())
-    # scrapers.append(CraigslistScraper(base='baltimore'))
-    # scrapers.append(GuruScraper())
-    scrapers.append(ElanceScraper())
+    scrapers.append(UpworkScraper())
+    scrapers.append(CraigslistScraper(base='baltimore'))
+    scrapers.append(GuruScraper())
+    # scrapers.append(ElanceScraper())
     for scraper in scrapers:
+        print scraper
         for p in scraper.get_postings("computer thing"):
             for k, v in p.items():
                 print k, " => ", v
