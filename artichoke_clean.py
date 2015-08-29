@@ -120,7 +120,7 @@ class CraigslistScraper(PostingScraper):
         except:
             pass
         try:
-            posting['text'] = PostingScraper._encode_unicode(soup.find('section', {'id': 'postingbody'}).text)
+            posting['description'] = PostingScraper._encode_unicode(soup.find('section', {'id': 'postingbody'}).text)
         except:
             pass
         try:
@@ -139,9 +139,13 @@ class CraigslistScraper(PostingScraper):
             posts = []  # temporary variable to store all of the posting data
             for i in range(1, pages + 1):
                 search_url = urlunsplit((self.scheme, self.source, "/search/ggg",
-                                         "query=%s&sort=date?s=%d" % (query, pages*100), ""))
+                                         "query=%s&sort=date?s=%d" % (query, i*100), ""))
+                print >> stderr, search_url
                 soup = PostingScraper._get_cleaned_soup_from_url(search_url)
-                posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
+                try:
+                    posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
+                except KeyError:  # handle if no href
+                    pass
             return [self._get_info_from_clp_posting(post) for post in posts]
         except Exception:
             # traceback.print_exc(file=stderr)
@@ -187,7 +191,7 @@ class UpworkScraper(PostingScraper):
         date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
         try:  # it's in the 'popover' attribute
             posting['date_posted'] = safe_dt_parse(date_posted_span['popover'])
-        except (KeyError, AttributeError, ValueError):
+        except (KeyError, AttributeError, ValueError, TypeError):
             # traceback.print_exc(file=stderr)
             pass
         # price
@@ -237,7 +241,10 @@ class UpworkScraper(PostingScraper):
                 # this url returns a list of postings of profiles. visit each profile
                 for article in soup.findAll('article'):  # get all 'article'
                     url = article.find('a', attrs=UpworkScraper._job_search_result_link_attrs)
-                    posts.append(self._clean_post_url(url['href']))
+                    try:
+                        posts.append(self._clean_post_url(url['href']))
+                    except (TypeError, KeyError):
+                        pass
             return map(self._get_info_from_upwork_posting,
                        map(PostingScraper._get_cleaned_soup_from_url, posts))
         except Exception:
@@ -291,7 +298,7 @@ class GuruScraper(PostingScraper):
             duration_span = posting_soup.find('span', attrs=GuruScraper._job_duration_span_attrs)
             actual_date_span = duration_span.find('span')
             posting['duration'] = safe_dt_parse(actual_date_span['data-date'])
-        except (KeyError, AttributeError, ValueError):
+        except (KeyError, AttributeError, ValueError, TypeError):
             # traceback.print_exc(file=stderr)
             pass
         # budget
@@ -330,10 +337,14 @@ class GuruScraper(PostingScraper):
                 print >> stderr, search_url
                 soup = PostingScraper._get_cleaned_soup_from_url(search_url)
                 services_list = soup.find(attrs=GuruScraper._job_search_results_list_attr)
-                for i, li in enumerate(services_list.findAll('li', attrs=GuruScraper._job_search_result_list_item_attrs)):
-                    h2 = li.find('h2', attrs=GuruScraper._job_search_results_header_attrs)
-                    a = h2.find('a')
-                    postings.append(self._clean_post_url(a['href']))
+                try:  # handle if there are more pages than results... services_list won't exist
+                    for i, li in enumerate(services_list.findAll('li', attrs=GuruScraper._job_search_result_list_item_attrs)):
+                        h2 = li.find('h2', attrs=GuruScraper._job_search_results_header_attrs)
+                        a = h2.find('a')
+                        postings.append(self._clean_post_url(a['href']))
+                except (AttributeError, TypeError, KeyError):  # also handle misc errors, want to gracefully return postings we already have
+                    # traceback.print_exc(file=stderr)
+                    pass
             return map(self._get_info_from_guru_job_page_soup,
                        map(PostingScraper._get_cleaned_soup_from_url, postings))
         except Exception:
@@ -381,6 +392,7 @@ class IndeedScraper(PostingScraper):
     _job_location_span_attrs = {"class": "location"}
     _job_date_span_attrs = {"class": "date"}
     _job_description_span_attrs = {"itemprop": "description"}
+    _job_summary_span_attrs = {"class": "summary"}
 
     def __init__(self, location):
         PostingScraper.__init__(self, "http://www.indeed.com")
@@ -393,7 +405,7 @@ class IndeedScraper(PostingScraper):
             url_data = row_result_soup.find('a')
             posting['url'] = self._clean_post_url(url_data['href'])
             posting['title'] = PostingScraper._encode_unicode(url_data.text)
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, TypeError):
             pass
         # id
         try:
@@ -426,9 +438,18 @@ class IndeedScraper(PostingScraper):
         # description
         try:
             posting['description'] = PostingScraper._encode_unicode(
-                row_result_soup.find("span", IndeedScraper._job_description_span_attrs).text)
+                row_result_soup.find("span", attrs=IndeedScraper._job_description_span_attrs).text)
         except AttributeError:
+            # traceback.print_exc(file=stderr)
             pass
+        if 'description' not in posting:  # try summary instead
+            try:
+                posting['description'] = PostingScraper._encode_unicode(
+                    row_result_soup.find('span', attrs=IndeedScraper._job_summary_span_attrs).text
+                )
+            except AttributeError:
+                # traceback.print_exc(file=stderr)
+                pass
         return posting
 
     def get_postings(self, query, pages=1):
@@ -441,7 +462,10 @@ class IndeedScraper(PostingScraper):
                 print >> stderr, search_url
                 soup = PostingScraper._get_cleaned_soup_from_url(search_url)
                 job_results_td = soup.find('td', attrs=IndeedScraper._job_results_col_attrs)
-                postings.extend(job_results_td.findAll('div', IndeedScraper._job_row_result_div_attrs))
+                try:
+                    postings.extend(job_results_td.findAll('div', IndeedScraper._job_row_result_div_attrs))
+                except AttributeError:
+                    pass
             return map(self._get_info_from_indeed_result, postings)
         except Exception:
             # traceback.print_exc(file=stderr)
@@ -468,8 +492,8 @@ class SimplyhiredScraper(PostingScraper):
             title_link = result_soup.find('a', attrs=SimplyhiredScraper._job_title_link_attrs)
             posting['external_url'] = self._clean_post_url(title_link['href'])
             posting['title'] = PostingScraper._encode_unicode(title_link.text)
-        except (AttributeError, KeyError):
-            traceback.print_exc(file=stderr)
+        except (AttributeError, KeyError, TypeError):
+            # traceback.print_exc(file=stderr)
             pass
         # url
         description_page_url = None
@@ -479,8 +503,8 @@ class SimplyhiredScraper(PostingScraper):
             description_page_url = tools_links[-1]['href']
             posting['url'] = description_page_url
             posting['unique_id'] = description_page_url  # TODO i couldn't actually find a unique id?
-        except (KeyError, AttributeError):
-            traceback.print_exc(file=stderr)
+        except (KeyError, AttributeError, IndexError):
+            # traceback.print_exc(file=stderr)
             pass
         if description_page_url is not None:
             # follow posting url to long description, and date posted
@@ -493,10 +517,12 @@ class SimplyhiredScraper(PostingScraper):
                 trs = info_table.findAll('tr')
                 for tr in trs:
                     tds = tr.findAll('td')
-                    if not tds:
-                        print >> stderr, 'uhoh'
-                    last_td = tds[-1]
-                    row_data_two.append(PostingScraper._encode_unicode(last_td.text))
+                    try:
+                        last_td = tds[-1]
+                        row_data_two.append(PostingScraper._encode_unicode(last_td.text))
+                    except IndexError:
+                        # traceback.print_exc(file=stderr)
+                        pass
                 info_labels = info_table.findAll('td', attrs=SimplyhiredScraper._description_page_table_info_label_attrs)
                 info_labels = map(lambda x: PostingScraper._encode_unicode(x.text).lower(), info_labels)
                 table_data = zip(info_labels, row_data_two)
@@ -508,26 +534,27 @@ class SimplyhiredScraper(PostingScraper):
                             g = geocoder.google(value, method='reverse')
                             posting['location'] = (g.city, g.state, g.country)
                         except Exception:
-                            traceback.print_exc(file=stderr)
+                            # traceback.print_exc(file=stderr)
+                            pass
                     elif 'date posted' in label:
                         try:
                             posting['date_posted'] = safe_dt_parse(value)
                         except (AttributeError, ValueError):
-                            traceback.print_exc(file=stderr)
+                            # traceback.print_exc(file=stderr)
                             pass
                     elif 'source' in label:
                         posting['external_source'] = value
                     elif 'company' in label:
                         posting['company'] = value
             except AttributeError:
-                traceback.print_exc(file=stderr)
+                # traceback.print_exc(file=stderr)
                 pass
             # description
             try:
                 description_div = description_page_soup.find('div', attrs=SimplyhiredScraper._description_page_description_attrs)
                 posting['description'] = PostingScraper._encode_unicode(description_div.text)
             except AttributeError:
-                traceback.print_exc(file=stderr)
+                # traceback.print_exc(file=stderr)
                 pass
         return posting
 
@@ -542,7 +569,10 @@ class SimplyhiredScraper(PostingScraper):
                 print >> stderr, search_url
                 soup = PostingScraper._get_cleaned_soup_from_url(search_url)
                 job_results_list_div = soup.find('div', attrs=SimplyhiredScraper._job_results_list_div_attrs)
-                postings.extend(job_results_list_div.findAll('div', SimplyhiredScraper._job_result_div_attrs))
+                try:
+                    postings.extend(job_results_list_div.findAll('div', SimplyhiredScraper._job_result_div_attrs))
+                except AttributeError:
+                    pass
             return map(self._get_info_from_simplyhired_result, postings)
         except Exception:
             traceback.print_exc(file=stderr)
@@ -582,7 +612,7 @@ class SimplyhiredScraper(PostingScraper):
 #             title_div = li_soup.find('div', attrs=GlassdoorScraper._job_page_title_div_attrs)
 #             posting['title'] = PostingScraper._encode_unicode(title_div.find('h2').text)
 #             posting['company'] = PostingScraper._encode_unicode(title_div.find('span').text).strip()
-#         except AttributeError:
+#         except (AttributeError, TypeError):
 #             traceback.print_exc(file=stderr)
 #             pass
 #         # date posted
@@ -592,14 +622,14 @@ class SimplyhiredScraper(PostingScraper):
 #             assert date_posted_text.lower().startswith('posted')
 #             date_posted_text = date_posted_text[date_posted_text.index('posted'):].strip()
 #             posting['date_posted'] = safe_dt_parse(date_posted_text)
-#         except (AttributeError, AssertionError):
+#         except (AttributeError, TypeError, AssertionError):
 #             traceback.print_exc(file=stderr)
 #             pass
 #         # description
 #         try:
 #             description_div = li_soup.find('div', attrs=GlassdoorScraper._job_page_description_div_attrs)
 #             posting['description'] = PostingScraper._encode_unicode(description_div.text)
-#         except AttributeError:
+#         except (AttributeError, TypeError):
 #             traceback.print_exc(file=stderr)
 #             pass
 #
@@ -623,8 +653,11 @@ class SimplyhiredScraper(PostingScraper):
 #                 # print soup
 #                 print url
 #                 results_ul = soup.find('ul', attrs=GlassdoorScraper._search_results_ul_attrs)
-#                 for li in results_ul.findAll('li', GlassdoorScraper._job_result_li_attrs):
-#                     postings.append(li)
+#                 try:
+#                     for li in results_ul.findAll('li', GlassdoorScraper._job_result_li_attrs):
+#                         postings.append(li)
+#                 except AttributeError:
+#                     pass
 #                 return map(self._get_posting_info_from_job_result, postings)
 #         except Exception:
 #             traceback.print_exc(file=stderr)
@@ -637,15 +670,15 @@ if __name__ == "__main__":
     scrapers.append(GuruScraper())
     scrapers.append(IndeedScraper("baltimore"))
     scrapers.append(SimplyhiredScraper("Baltimore, MD"))
-    # scrapers.append(GlassdoorScraper())
 
+    # scrapers.append(GlassdoorScraper())
     # scrapers.append(ElanceScraper())
+    keys_to_verify = ['source', 'unique_id', 'title', 'date_posted', 'description']
     for scraper in scrapers:
         print scraper
-        for p in scraper.get_postings("computer thing", pages=2):
-            # print p['source']
-            # print p['unique_id']
-            # print p['title']
-            # print p['date_posted']
+        for p in scraper.get_postings("computer thing", pages=30):
             for k, v in p.items():
                 print k, " => ", v
+            for k in keys_to_verify:
+                if k not in p:
+                    print '%s not there!!' % k

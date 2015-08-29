@@ -2,13 +2,13 @@ __author__ = 'mcs'
 
 import requests
 from time import sleep
-from pyvirtualdisplay import Display
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
-import errno
-from socket import error as socket_error
 from sys import stderr
+# from pyvirtualdisplay import Display
+# from selenium import webdriver
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.common.exceptions import TimeoutException
+# import errno
+# from socket import error as socket_error
 
 
 def _sleep_retry_print_helper(num_secs):
@@ -16,11 +16,11 @@ def _sleep_retry_print_helper(num_secs):
     sleep(num_secs)
 
 
-def _safe_browser_close(browser):
-    try:
-        browser.close()
-    except socket_error:
-        pass
+# def _safe_browser_close(browser):
+#     try:
+#         browser.close()
+#     except socket_error:
+#         pass
 
 
 def get_html_from_url(url, dynamic=False, id_to_wait_for=None):
@@ -48,35 +48,36 @@ def get_html_from_url(url, dynamic=False, id_to_wait_for=None):
                 _sleep_retry_print_helper(5)  # retry
 
     else:  # use selenium
-        # code for virtual display, for firefox, set not visible! pseudo-headless fuck yeah
-        display = Display(visible=0, size=(800, 600))
-        display.start()
-        # with closing(webdriver.Firefox()) as browser:
-        if True:
-            browser = webdriver.Firefox()
-            browser.set_page_load_timeout(15)
-            for i in xrange(5):  # try at most five times
-                try:
-                    browser.get(url)  # potentially can trigger timeout too? put in try clause just in case
-                    if id_to_wait_for is not None:
-                        WebDriverWait(browser, timeout=15).until(
-                            lambda x: x.find_element_by_id(id_to_wait_for)
-                        )  # can trigger timeout
-                    text = browser.page_source
-                    # sleep(1)  # add this in to avoid overtaxing servers
-                    break  # ... if we get what we want
-                except TimeoutException:  # if we get a timeout in webdriverwait, try again in 5 seconds
-                    _safe_browser_close(browser)
-                    _sleep_retry_print_helper(5)  # retry
-                except socket_error as s:
-                    # https://stackoverflow.com/questions/14425401/catch-socket-error-errno-111-connection-refused-exception
-                    # if we get a connection refused in browser.page_source
-                    if s.errno != errno.ECONNREFUSED:
-                        raise s  # re-raise if it isn't connection refused
-                    else:  # if it is, try again in 5 seconds
-                        _safe_browser_close(browser)
-                        _sleep_retry_print_helper(5)  # retry
-        display.stop()
+        assert True
+        # # code for virtual display, for firefox, set not visible! pseudo-headless fuck yeah
+        # display = Display(visible=0, size=(800, 600))
+        # display.start()
+        # # with closing(webdriver.Firefox()) as browser:
+        # if True:
+        #     browser = webdriver.Firefox()
+        #     browser.set_page_load_timeout(15)
+        #     for i in xrange(5):  # try at most five times
+        #         try:
+        #             browser.get(url)  # potentially can trigger timeout too? put in try clause just in case
+        #             if id_to_wait_for is not None:
+        #                 WebDriverWait(browser, timeout=15).until(
+        #                     lambda x: x.find_element_by_id(id_to_wait_for)
+        #                 )  # can trigger timeout
+        #             text = browser.page_source
+        #             # sleep(1)  # add this in to avoid overtaxing servers
+        #             break  # ... if we get what we want
+        #         except TimeoutException:  # if we get a timeout in webdriverwait, try again in 5 seconds
+        #             _safe_browser_close(browser)
+        #             _sleep_retry_print_helper(5)  # retry
+        #         except socket_error as s:
+        #             # https://stackoverflow.com/questions/14425401/catch-socket-error-errno-111-connection-refused-exception
+        #             # if we get a connection refused in browser.page_source
+        #             if s.errno != errno.ECONNREFUSED:
+        #                 raise s  # re-raise if it isn't connection refused
+        #             else:  # if it is, try again in 5 seconds
+        #                 _safe_browser_close(browser)
+        #                 _sleep_retry_print_helper(5)  # retry
+        # display.stop()
     if text is None:
         raise ValueError("couldn't get html text from url:"+url)
     return text
