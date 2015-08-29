@@ -34,10 +34,12 @@ def get_html_from_url(url, dynamic=False, id_to_wait_for=None):
     :param id_to_wait_for: an ID of an object on the page to wait for loading, used if dynamic
     :return: the HTML rendered
     """
+    # headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
     text = None
     if not dynamic:  # use requests
         for i in xrange(5):
             try:
+                # r = requests.get(url, headers=headers)
                 r = requests.get(url)
                 text = r.text
                 break

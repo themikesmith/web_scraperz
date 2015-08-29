@@ -99,7 +99,7 @@ class CraigslistScraper(PostingScraper):
         PostingScraper.__init__(self, base)
 
     def _get_info_from_clp_posting(self, url):
-        posting = {}
+        posting = {'source': self.source}
         soup = PostingScraper._get_cleaned_soup_from_url(url)
         posting['url'] = url
         try:
@@ -124,14 +124,13 @@ class CraigslistScraper(PostingScraper):
         except:
             pass
         try:
-            posting['date_created'] = soup.find('time')['datetime']
+            posting['date_posted'] = soup.find('time')['datetime']
         except:
             pass
         try:
             posting['unique_id'] = 'clgig'+re.match('[^\d]*(\d+).html', url).group(1)
         except:
             pass
-        posting['source'] = self.source
         return posting
 
     def get_postings(self, query, pages=1):
@@ -168,7 +167,7 @@ class UpworkScraper(PostingScraper):
         :param posting_soup: the Soup-ed HTML
         :return: the data in a dict
         """
-        posting = {}
+        posting = {'source': self.source}
         # url
         try:
             url = posting_soup.find('meta', attrs=UpworkScraper._job_url_attrs)
@@ -187,7 +186,7 @@ class UpworkScraper(PostingScraper):
         # date posted
         date_posted_span = container.find(attrs=UpworkScraper._job_dateposted_attrs)
         try:  # it's in the 'popover' attribute
-            posting['date_created'] = safe_dt_parse(date_posted_span['popover'])
+            posting['date_posted'] = safe_dt_parse(date_posted_span['popover'])
         except (KeyError, AttributeError, ValueError):
             # traceback.print_exc(file=stderr)
             pass
@@ -223,7 +222,6 @@ class UpworkScraper(PostingScraper):
         except AttributeError:  # handle if soup finds nothing for skills
             pass
         # unique id
-        posting['source'] = self.source
         return posting
 
     def get_postings(self, query, pages=1):
@@ -265,7 +263,7 @@ class GuruScraper(PostingScraper):
         PostingScraper.__init__(self, "http://www.guru.com")
 
     def _get_info_from_guru_job_page_soup(self, posting_soup):
-        posting = {}
+        posting = {'source': self.source}
         # url, and unique id
         url = posting_soup.find('meta', attrs=GuruScraper._job_url_meta_attrs)
         if url is not None:
@@ -320,7 +318,6 @@ class GuruScraper(PostingScraper):
         except AttributeError:
             # traceback.print_exc(file=stderr)
             pass
-        posting['source'] = self.source
         return posting
 
     def get_postings(self, query, pages=1):
@@ -390,7 +387,7 @@ class IndeedScraper(PostingScraper):
         self.location = location
 
     def _get_info_from_indeed_result(self, row_result_soup):
-        posting = {}
+        posting = {'source': self.source}
         # url, title
         try:
             url_data = row_result_soup.find('a')
@@ -432,7 +429,6 @@ class IndeedScraper(PostingScraper):
                 row_result_soup.find("span", IndeedScraper._job_description_span_attrs).text)
         except AttributeError:
             pass
-        posting['source'] = self.source
         return posting
 
     def get_postings(self, query, pages=1):
@@ -466,8 +462,7 @@ class SimplyhiredScraper(PostingScraper):
         self.location = location
 
     def _get_info_from_simplyhired_result(self, result_soup):
-        posting = dict()
-        posting['source'] = self.source
+        posting = {'source': self.source}
         # external url, title
         try:
             title_link = result_soup.find('a', attrs=SimplyhiredScraper._job_title_link_attrs)
@@ -483,6 +478,7 @@ class SimplyhiredScraper(PostingScraper):
             tools_links = tools_container.findAll('a')
             description_page_url = tools_links[-1]['href']
             posting['url'] = description_page_url
+            posting['unique_id'] = description_page_url  # TODO i couldn't actually find a unique id?
         except (KeyError, AttributeError):
             traceback.print_exc(file=stderr)
             pass
@@ -553,27 +549,86 @@ class SimplyhiredScraper(PostingScraper):
             return []
 
 
-class GlassdoorScraper(PostingScraper):
-    def __init__(self):
-        PostingScraper.__init__(self, "http://www.glassdoor.com")
-
-    def get_postings(self, query, pages=1):
-        try:
-            query = quote_plus(query)
-            # initial url example: http://www.glassdoor.com/Job/jobs.htm?sc.keyword=lawn
-            for page_num in range(1, pages+1):
-                if pages == 1:
-                    initial_search_url = urlunsplit((self.scheme, self.source, "Job/jobs.htm",
-                                                     "sc.keyword=%s" % (query, quote_plus(self.location.lower()), pages), ""))
-                else:
-                    assert pages > 1
-            # changes, to eg http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4.htm
-            # and at pagination, http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4_IP2.htm
-            # replace _IP or _IP(page num).htm with _IP(next page num)
-            # or if _IP doesn't exist, add it
-        except Exception:
-            traceback.print_exc(file=stderr)
-            return []
+# class GlassdoorScraper(PostingScraper):
+#     _search_results_ul_attrs = {"class": "jlGrid"}
+#     _job_result_li_attrs = {"class": re.compile(r"jobListing")}
+#     _job_result_link_attrs = {"class": "jobLink"}
+#     _job_page_title_div_attrs = {"class": "header cell info"}
+#     _job_page_date_posted_span_attrs = {"class": "floatRt minor padTopSm hideHH"}
+#     _job_page_description_div_attrs = {"class": "jobDescriptionContent"}
+#     _job_link_attrs = {"rel": "canonical"}
+#
+#     def __init__(self):
+#         PostingScraper.__init__(self, "http://www.glassdoor.com")
+#
+#     def _get_posting_info_from_job_result(self, li_soup):
+#         print li_soup
+#         posting = {'source': self.source}
+#         # url, unique id
+#         try:
+#             url = li_soup.find('link', attrs=GlassdoorScraper._job_link_attrs)
+#             if url is not None:
+#                 url_text = url['href']
+#                 posting['url'] = url_text
+#                 i = url_text.index("jl=")
+#                 unique_id = url_text[i+1:]
+#                 print unique_id
+#                 posting['unique_id'] = unique_id
+#         except (KeyError, IndexError):
+#             traceback.print_exc(file=stderr)
+#             pass
+#         # title, company
+#         try:
+#             title_div = li_soup.find('div', attrs=GlassdoorScraper._job_page_title_div_attrs)
+#             posting['title'] = PostingScraper._encode_unicode(title_div.find('h2').text)
+#             posting['company'] = PostingScraper._encode_unicode(title_div.find('span').text).strip()
+#         except AttributeError:
+#             traceback.print_exc(file=stderr)
+#             pass
+#         # date posted
+#         try:
+#             date_posted_span = li_soup.find('span', attrs=GlassdoorScraper._job_page_date_posted_span_attrs)
+#             date_posted_text = PostingScraper._encode_unicode(date_posted_span.text)
+#             assert date_posted_text.lower().startswith('posted')
+#             date_posted_text = date_posted_text[date_posted_text.index('posted'):].strip()
+#             posting['date_posted'] = safe_dt_parse(date_posted_text)
+#         except (AttributeError, AssertionError):
+#             traceback.print_exc(file=stderr)
+#             pass
+#         # description
+#         try:
+#             description_div = li_soup.find('div', attrs=GlassdoorScraper._job_page_description_div_attrs)
+#             posting['description'] = PostingScraper._encode_unicode(description_div.text)
+#         except AttributeError:
+#             traceback.print_exc(file=stderr)
+#             pass
+#
+#     def get_postings(self, query, pages=1):
+#         try:
+#             query = quote_plus(query)
+#             postings = []
+#             # initial url example: http://www.glassdoor.com/Job/jobs.htm?sc.keyword=lawn
+#             for page_num in range(1, pages+1):
+#                 # deal with dumb pagination
+#                 if page_num == 1:
+#                     url = urlunsplit((self.scheme, self.source, "Job/jobs.htm", "sc.keyword=%s" % query, ""))
+#                 else:  # pages > 1
+#                     # changes, to eg http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4.htm
+#                     # and at pagination, http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4_IP2.htm
+#                     # replace _IP or _IP(page num).htm with _IP(next page num)
+#                     # or if _IP doesn't exist, add it
+#                     url = "wahoo"
+#                 # once have url, get data
+#                 soup = PostingScraper._get_cleaned_soup_from_url(url)
+#                 # print soup
+#                 print url
+#                 results_ul = soup.find('ul', attrs=GlassdoorScraper._search_results_ul_attrs)
+#                 for li in results_ul.findAll('li', GlassdoorScraper._job_result_li_attrs):
+#                     postings.append(li)
+#                 return map(self._get_posting_info_from_job_result, postings)
+#         except Exception:
+#             traceback.print_exc(file=stderr)
+#             return []
 
 if __name__ == "__main__":
     scrapers = list()
@@ -582,11 +637,15 @@ if __name__ == "__main__":
     scrapers.append(GuruScraper())
     scrapers.append(IndeedScraper("baltimore"))
     scrapers.append(SimplyhiredScraper("Baltimore, MD"))
+    # scrapers.append(GlassdoorScraper())
 
     # scrapers.append(ElanceScraper())
     for scraper in scrapers:
         print scraper
         for p in scraper.get_postings("computer thing", pages=2):
+            # print p['source']
+            # print p['unique_id']
             # print p['title']
+            # print p['date_posted']
             for k, v in p.items():
                 print k, " => ", v
