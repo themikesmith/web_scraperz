@@ -8,6 +8,9 @@ class Posting(MutableMapping):
     """
     This class represents a "posting", storing data, and testing equality
      based on fuzzy matching to text content.
+
+    In the __eq__ and __hash__ methods, currently checks for description first
+     THEN moves to ID / source pair.  Edit if you want.
     """
     DESCRIPTION = "description"
     SOURCE = "source"
@@ -124,8 +127,9 @@ if __name__ == "__main__":
     full_match_fuzzy.add_description("This is a super test description")
     full_match_fuzzy.add_id("11")
     full_match_fuzzy.add_source("craigslist")
-    add_dict = Posting({Posting.ID: "123"})
-    print add_dict
+    d = {Posting.ID: "123"}
+    add_dict = Posting(d)
+    assert str(add_dict) == str(d)
 
     try:
         blank == blank_two
