@@ -8,6 +8,7 @@ from HTMLParser import HTMLParser
 from sys import stderr
 import traceback
 from super_dt_parser import safe_dt_parse
+from posting_class import Posting
 
 
 class PostingScraper:
@@ -99,7 +100,7 @@ class CraigslistScraper(PostingScraper):
         PostingScraper.__init__(self, base)
 
     def _get_info_from_clp_posting(self, url):
-        posting = {'source': self.source}
+        posting = Posting({'source': self.source})
         soup = PostingScraper._get_cleaned_soup_from_url(url)
         posting['url'] = url
         try:
@@ -146,7 +147,7 @@ class CraigslistScraper(PostingScraper):
                     posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
                 except KeyError:  # handle if no href
                     pass
-            return [self._get_info_from_clp_posting(post) for post in posts]
+            return list(set([self._get_info_from_clp_posting(post) for post in posts]))
         except Exception:
             # traceback.print_exc(file=stderr)
             return []
@@ -171,7 +172,7 @@ class UpworkScraper(PostingScraper):
         :param posting_soup: the Soup-ed HTML
         :return: the data in a dict
         """
-        posting = {'source': self.source}
+        posting = Posting({'source': self.source})
         # url
         try:
             url = posting_soup.find('meta', attrs=UpworkScraper._job_url_attrs)
@@ -245,8 +246,8 @@ class UpworkScraper(PostingScraper):
                         posts.append(self._clean_post_url(url['href']))
                     except (TypeError, KeyError):
                         pass
-            return map(self._get_info_from_upwork_posting,
-                       map(PostingScraper._get_cleaned_soup_from_url, posts))
+            return list(set(map(self._get_info_from_upwork_posting,
+                       map(PostingScraper._get_cleaned_soup_from_url, posts))))
         except Exception:
             # traceback.print_exc(file=stderr)
             return []
@@ -270,7 +271,7 @@ class GuruScraper(PostingScraper):
         PostingScraper.__init__(self, "http://www.guru.com")
 
     def _get_info_from_guru_job_page_soup(self, posting_soup):
-        posting = {'source': self.source}
+        posting = Posting({'source': self.source})
         # url, and unique id
         url = posting_soup.find('meta', attrs=GuruScraper._job_url_meta_attrs)
         if url is not None:
@@ -345,8 +346,8 @@ class GuruScraper(PostingScraper):
                 except (AttributeError, TypeError, KeyError):  # also handle misc errors, want to gracefully return postings we already have
                     # traceback.print_exc(file=stderr)
                     pass
-            return map(self._get_info_from_guru_job_page_soup,
-                       map(PostingScraper._get_cleaned_soup_from_url, postings))
+            return list(set(map(self._get_info_from_guru_job_page_soup,
+                       map(PostingScraper._get_cleaned_soup_from_url, postings))))
         except Exception:
             traceback.print_exc(file=stderr)
             return []
@@ -399,7 +400,7 @@ class IndeedScraper(PostingScraper):
         self.location = location
 
     def _get_info_from_indeed_result(self, row_result_soup):
-        posting = {'source': self.source}
+        posting = Posting({'source': self.source})
         # url, title
         try:
             url_data = row_result_soup.find('a')
@@ -466,7 +467,7 @@ class IndeedScraper(PostingScraper):
                     postings.extend(job_results_td.findAll('div', IndeedScraper._job_row_result_div_attrs))
                 except AttributeError:
                     pass
-            return map(self._get_info_from_indeed_result, postings)
+            return list(set(map(self._get_info_from_indeed_result, postings)))
         except Exception:
             # traceback.print_exc(file=stderr)
             return []
@@ -486,7 +487,7 @@ class SimplyhiredScraper(PostingScraper):
         self.location = location
 
     def _get_info_from_simplyhired_result(self, result_soup):
-        posting = {'source': self.source}
+        posting = Posting({'source': self.source})
         # external url, title
         try:
             title_link = result_soup.find('a', attrs=SimplyhiredScraper._job_title_link_attrs)
@@ -593,7 +594,7 @@ class SimplyhiredScraper(PostingScraper):
 #
 #     def _get_posting_info_from_job_result(self, li_soup):
 #         print li_soup
-#         posting = {'source': self.source}
+#         posting = Posting({'source': self.source})
 #         # url, unique id
 #         try:
 #             url = li_soup.find('link', attrs=GlassdoorScraper._job_link_attrs)
@@ -667,16 +668,16 @@ if __name__ == "__main__":
     scrapers = list()
     scrapers.append(CraigslistScraper(base='baltimore'))
     scrapers.append(UpworkScraper())
-    scrapers.append(GuruScraper())
-    scrapers.append(IndeedScraper("baltimore"))
-    scrapers.append(SimplyhiredScraper("Baltimore, MD"))
+    # scrapers.append(GuruScraper())
+    # scrapers.append(IndeedScraper("baltimore"))
+    # scrapers.append(SimplyhiredScraper("Baltimore, MD"))
 
     # scrapers.append(GlassdoorScraper())
     # scrapers.append(ElanceScraper())
     keys_to_verify = ['source', 'unique_id', 'title', 'date_posted', 'description']
     for scraper in scrapers:
-        print scraper
-        for p in scraper.get_postings("computer thing", pages=30):
+        print scraper.__class__
+        for p in scraper.get_postings("computer thing", pages=1):
             for k, v in p.items():
                 print k, " => ", v
             for k in keys_to_verify:
