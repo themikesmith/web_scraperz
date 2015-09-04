@@ -11,6 +11,7 @@ class Posting(MutableMapping):
 
     In the __eq__ and __hash__ methods, currently checks for description first
      THEN moves to ID / source pair.  Edit if you want.
+     Only fuzzy matches the description -- figured ID / source pair was bad to fuzzy match =)
     """
     DESCRIPTION = "description"
     SOURCE = "source"
