@@ -3,6 +3,7 @@ from dateutil import parser as dt_parser
 from dateutil.tz import tzoffset
 from datetime import datetime, timedelta
 import re
+from sys import stderr
 
 
 # two groups - an integer, and the unit of time
@@ -12,16 +13,23 @@ _re_time_ago = re.compile(r"(\d+)\+? (year|month|week|day|hour|minute|second|mic
 def safe_dt_parse(dt):
     """
     Safe wrapper for dt parser, deals with weird TZ bug,
-    and also handles 'now', 'today', and X days/months/seconds ago, etc
+    and also handles 'now', 'today', 'this week/month/year', and X days/months/seconds ago, etc
     :param dt:
     :return:
     """
-    s_dt = str(dt)
+    s_dt = str(dt).strip()
+
     # handle 'now'
     if s_dt.lower() == 'now':
         return datetime.now()
     if s_dt.lower() == 'today':
         return datetime.today()
+    if s_dt.lower() == "this week":
+        return datetime.today() - timedelta(days=7)
+    if s_dt.lower() == "this month":  # hack, subtract 28 days for a month
+        return datetime.today() - timedelta(days=28)
+    if s_dt.lower() == "this year":
+        return datetime.today() - timedelta(days=365)
     # handle 'X days/months/seconds ago', etc
     m = _re_time_ago.match(s_dt)
     if m is not None:
@@ -33,6 +41,7 @@ def safe_dt_parse(dt):
         d = dt_parser.parse(dt)
     except (AttributeError, ValueError) as e:
         # if dt can't be 'read', or if unknown string format
+        print >> stderr, s_dt
         raise e
     try:
         # print >> stderr, "verifying tz:", d

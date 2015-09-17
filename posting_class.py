@@ -58,7 +58,7 @@ class Posting(MutableMapping):
             s = self[Posting.ID] + self[Posting.SOURCE]
             return s.__hash__()
         else:
-            raise ValueError("Error when hashing: posting doesn't have description, nor id + source")
+            raise ValueError("Error when hashing: posting doesn't have description, nor id + source\n\n%s" % self)
 
     def __eq__(self, other):
         if Posting.DESCRIPTION in self and Posting.DESCRIPTION in other:

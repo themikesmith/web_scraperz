@@ -1,5 +1,5 @@
 from urllib import quote_plus
-from urlparse import urlsplit, urlunsplit
+from urlparse import urlsplit, urlunsplit, parse_qs
 import re
 import geocoder
 from super_requests import get_html_from_url
@@ -21,7 +21,7 @@ class PostingScraper:
 
     def __init__(self, base):
         """
-        initialize the scraper with a base url, and a source
+        initialize the scraper with a base url
         """
         r = urlsplit(base)
         self.scheme = r.scheme
@@ -30,6 +30,10 @@ class PostingScraper:
     @staticmethod
     def _encode_unicode(s):
         return s.encode('utf8')
+
+    @staticmethod
+    def _remove_none_from_things(provided_list):
+        return [x for x in provided_list if x is not None]
 
     def _clean_post_url(self, url):
         """
@@ -94,10 +98,10 @@ class PostingScraper:
 class CraigslistScraper(PostingScraper):
     _post_title_attrs = {"class": "postingtitletext"}
 
-    def __init__(self, base):
-        if base == 'baltimore':
-            base = 'http://baltimore.craigslist.org'
-        PostingScraper.__init__(self, base)
+    def __init__(self, base_url):
+        # if base == 'baltimore':
+        #     base = 'http://baltimore.craigslist.org'
+        PostingScraper.__init__(self, base_url)
 
     def _get_info_from_clp_posting(self, url):
         posting = Posting({'source': self.source})
@@ -347,44 +351,10 @@ class GuruScraper(PostingScraper):
                     # traceback.print_exc(file=stderr)
                     pass
             return list(set(map(self._get_info_from_guru_job_page_soup,
-                       map(PostingScraper._get_cleaned_soup_from_url, postings))))
+                        map(PostingScraper._get_cleaned_soup_from_url, postings))))
         except Exception:
             traceback.print_exc(file=stderr)
             return []
-
-
-# class ElanceScraper(PostingScraper):
-#     # api reference:
-#     # https://www.elance.com/q/api2/getting-started
-#
-#     _job_search_results_div_attrs = {"id": "jobSearchResults"}
-#     _job_result_card_div_attrs = {"class": re.compile(r"^jobCard")}
-#     _job_card_url_attrs = {"class": "title"}
-#
-#     def __init__(self):
-#         PostingScraper.__init__(self, "http://www.elance.com")
-#
-#     def get_postings(self, query, pages=1):
-#         # https://www.elance.com/browse-jobs -- base
-#         # example query: https://www.elance.com/r/jobs/q-computer%20thing%20%21/
-#         # ex two: https://www.elance.com/r/jobs/q-computer
-#         # three: https://www.elance.com/r/jobs/q-computer%20thing
-#         postings = []
-#         query = quote_plus(query)
-#         try:
-#             search_url = urlunsplit((self.scheme, self.source, "r/jobs/q-%s" % query, "", ""))
-#             soup = PostingScraper._get_cleaned_soup_from_url(search_url)
-#             print soup
-#             job_search_results_div = soup.find('div', attrs=ElanceScraper._job_search_results_div_attrs)
-#             for job_card_div in job_search_results_div.findAll('div', attrs=ElanceScraper._job_result_card_div_attrs):
-#                 url = job_card_div.find('a', attrs=ElanceScraper._job_card_url_attrs)
-#                 print url
-#                 postings.append(url)
-#             print postings
-#             return postings
-#         except Exception:
-#             traceback.print_exc(file=stderr)
-#             return []
 
 
 class IndeedScraper(PostingScraper):
@@ -395,9 +365,12 @@ class IndeedScraper(PostingScraper):
     _job_description_span_attrs = {"itemprop": "description"}
     _job_summary_span_attrs = {"class": "summary"}
 
-    def __init__(self, location):
+    def __init__(self, location=""):
         PostingScraper.__init__(self, "http://www.indeed.com")
-        self.location = location
+        if location:
+            self.location = location
+        else:
+            self.location = ""
 
     def _get_info_from_indeed_result(self, row_result_soup):
         posting = Posting({'source': self.source})
@@ -482,9 +455,12 @@ class SimplyhiredScraper(PostingScraper):
     _description_page_description_attrs = {"class": "job-description"}
     _description_page_table_info_label_attrs = {"class": "info-label"}
 
-    def __init__(self, location):
+    def __init__(self, location=""):
         PostingScraper.__init__(self, "http://www.simplyhired.com")
-        self.location = location
+        if location:
+            self.location = location
+        else:
+            self.location = ""
 
     def _get_info_from_simplyhired_result(self, result_soup):
         posting = Posting({'source': self.source})
@@ -574,110 +550,164 @@ class SimplyhiredScraper(PostingScraper):
                     postings.extend(job_results_list_div.findAll('div', SimplyhiredScraper._job_result_div_attrs))
                 except AttributeError:
                     pass
-            return map(self._get_info_from_simplyhired_result, postings)
+            return list(set(map(self._get_info_from_simplyhired_result, postings)))
         except Exception:
             traceback.print_exc(file=stderr)
             return []
 
 
-# class GlassdoorScraper(PostingScraper):
-#     _search_results_ul_attrs = {"class": "jlGrid"}
-#     _job_result_li_attrs = {"class": re.compile(r"jobListing")}
-#     _job_result_link_attrs = {"class": "jobLink"}
-#     _job_page_title_div_attrs = {"class": "header cell info"}
-#     _job_page_date_posted_span_attrs = {"class": "floatRt minor padTopSm hideHH"}
-#     _job_page_description_div_attrs = {"class": "jobDescriptionContent"}
-#     _job_link_attrs = {"rel": "canonical"}
-#
-#     def __init__(self):
-#         PostingScraper.__init__(self, "http://www.glassdoor.com")
-#
-#     def _get_posting_info_from_job_result(self, li_soup):
-#         print li_soup
-#         posting = Posting({'source': self.source})
-#         # url, unique id
-#         try:
-#             url = li_soup.find('link', attrs=GlassdoorScraper._job_link_attrs)
-#             if url is not None:
-#                 url_text = url['href']
-#                 posting['url'] = url_text
-#                 i = url_text.index("jl=")
-#                 unique_id = url_text[i+1:]
-#                 print unique_id
-#                 posting['unique_id'] = unique_id
-#         except (KeyError, IndexError):
-#             traceback.print_exc(file=stderr)
-#             pass
-#         # title, company
-#         try:
-#             title_div = li_soup.find('div', attrs=GlassdoorScraper._job_page_title_div_attrs)
-#             posting['title'] = PostingScraper._encode_unicode(title_div.find('h2').text)
-#             posting['company'] = PostingScraper._encode_unicode(title_div.find('span').text).strip()
-#         except (AttributeError, TypeError):
-#             traceback.print_exc(file=stderr)
-#             pass
-#         # date posted
-#         try:
-#             date_posted_span = li_soup.find('span', attrs=GlassdoorScraper._job_page_date_posted_span_attrs)
-#             date_posted_text = PostingScraper._encode_unicode(date_posted_span.text)
-#             assert date_posted_text.lower().startswith('posted')
-#             date_posted_text = date_posted_text[date_posted_text.index('posted'):].strip()
-#             posting['date_posted'] = safe_dt_parse(date_posted_text)
-#         except (AttributeError, TypeError, AssertionError):
-#             traceback.print_exc(file=stderr)
-#             pass
-#         # description
-#         try:
-#             description_div = li_soup.find('div', attrs=GlassdoorScraper._job_page_description_div_attrs)
-#             posting['description'] = PostingScraper._encode_unicode(description_div.text)
-#         except (AttributeError, TypeError):
-#             traceback.print_exc(file=stderr)
-#             pass
-#
-#     def get_postings(self, query, pages=1):
-#         try:
-#             query = quote_plus(query)
-#             postings = []
-#             # initial url example: http://www.glassdoor.com/Job/jobs.htm?sc.keyword=lawn
-#             for page_num in range(1, pages+1):
-#                 # deal with dumb pagination
-#                 if page_num == 1:
-#                     url = urlunsplit((self.scheme, self.source, "Job/jobs.htm", "sc.keyword=%s" % query, ""))
-#                 else:  # pages > 1
-#                     # changes, to eg http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4.htm
-#                     # and at pagination, http://www.glassdoor.com/Job/lawn-jobs-SRCH_KE0,4_IP2.htm
-#                     # replace _IP or _IP(page num).htm with _IP(next page num)
-#                     # or if _IP doesn't exist, add it
-#                     url = "wahoo"
-#                 # once have url, get data
-#                 soup = PostingScraper._get_cleaned_soup_from_url(url)
-#                 # print soup
-#                 print url
-#                 results_ul = soup.find('ul', attrs=GlassdoorScraper._search_results_ul_attrs)
-#                 try:
-#                     for li in results_ul.findAll('li', GlassdoorScraper._job_result_li_attrs):
-#                         postings.append(li)
-#                 except AttributeError:
-#                     pass
-#                 return map(self._get_posting_info_from_job_result, postings)
-#         except Exception:
-#             traceback.print_exc(file=stderr)
-#             return []
+class ZipRecruiterScraper(PostingScraper):
+    _job_list_div_attrs = {"id": "job_list"}
+    _job_result_link_attrs = {"class": "job_link"}
+    _job_posting_h1_title_attrs = {"itemprop": "title"}
+    _job_posting_ogurl_attrs = {"property": "og:url"}
+    _job_posting_p_date_posted_attrs = {"class": re.compile(r"^[Pp]osted.*")}
+    _job_posting_div_description_attrs = {"itemprop": "description"}
+    _job_posting_latlong_attrs = {"name": "geo.position"}
+    _job_posting_locdiv_attrs = {"itemprop": "jobLocation"}
+
+    def __init__(self, location=""):
+        PostingScraper.__init__(self, "http://www.ziprecruiter.com")
+        if location:
+            self.location = location
+        else:
+            self.location = ""
+
+    def get_postings(self, query, pages=1):
+        try:
+            postings = []
+            query = quote_plus(query)
+            for page_num in range(1, pages+1):
+                # https://www.ziprecruiter.com/candidate/search?sort=best-match&search=writer&page=2&location=baltimore
+                search_url = urlunsplit((self.scheme, self.source, "candidate/search",
+                                         "sort=best-match&search=%s&location=%s&page=%d" %
+                                         (query, quote_plus(self.location.lower()), page_num), ""))
+                print >> stderr, search_url
+                soup = PostingScraper._get_cleaned_soup_from_url(search_url)
+                job_results_list_div = soup.find('div', attrs=ZipRecruiterScraper._job_list_div_attrs)
+                try:
+                    postings.extend(map(lambda x: x['href'],
+                                        job_results_list_div.findAll('a', ZipRecruiterScraper._job_result_link_attrs)))
+                except AttributeError:
+                    pass
+            # note that we could return None if we go to an external url here
+            postings = map(self._get_info_from_ziprecruiter_result, postings)
+            return list(set(PostingScraper._remove_none_from_things(postings)))
+        except Exception:
+            traceback.print_exc(file=stderr)
+            return []
+
+    def _get_info_from_ziprecruiter_result(self, job_link):
+        print >> stderr, job_link
+        soup = PostingScraper._get_cleaned_soup_from_url(job_link)
+        if not len(soup):
+            # print >> stderr, "returning none, soup false, link:%s" % job_link
+            return None
+        posting = Posting()
+        # url
+        try:
+            url_meta = soup.find('meta', attrs=ZipRecruiterScraper._job_posting_ogurl_attrs)
+            url = url_meta['content']
+            posting.add_url(url)
+            # id is the last series of alphanumeric characters after the last hyphen in the url path
+            # e.g., /jobs/proedit-inc-18374379/contract-scientific-writer-2ccbf90f
+            # would mean 2ccbf90f
+            things = urlsplit(url)
+            path = things[2]
+            last_hyphen = path.rfind('-')
+            if last_hyphen != -1:
+                # print >> stderr, path[last_hyphen+1:]
+                posting.add_id(path[last_hyphen+1:])
+            else:
+                # just take the whole url after the base
+                # print >> stderr, "couldn't find id in url:%s" % url
+                # print >> stderr, "making id:", path
+                posting.add_id(path)
+        except (TypeError, IndexError):
+            # traceback.print_exc(file=stderr)
+            pass
+        # source
+        posting.add_source(self.source)
+        # title
+        try:
+            title_h1 = soup.find('h1', attrs=ZipRecruiterScraper._job_posting_h1_title_attrs)
+            posting.add_title(PostingScraper._encode_unicode(title_h1.text))
+        except AttributeError:  # if title_h1 is None
+            # traceback.print_exc(file=stderr)
+            pass
+        # location
+        try:
+            # try to do the following first, more exact
+            geoloc_meta = soup.find('meta', attrs=ZipRecruiterScraper._job_posting_latlong_attrs)['content']
+            geoloc_meta = re.sub(";", ",", geoloc_meta)
+            g = geocoder.google(geoloc_meta.split(','), method='reverse')
+            # print >> stderr, "reverse by latlong, loc:%s => g:%s" % (geoloc_meta, str(g))
+            posting['state'] = g.state
+            posting['city'] = g.city
+            posting['country'] = g.country
+        except (TypeError, AttributeError, KeyError):
+            # try to find the google map link
+            try:
+                maps_url = soup.find(href=re.compile(r"google\.com/maps|maps\.google\.com"))['href']
+                things = urlsplit(maps_url)
+                params = things[3]
+                loc = parse_qs(params)
+                loc_str = loc['q'][0]
+                g = geocoder.google(loc_str)
+                # print >> stderr, "normal by loc:%s => g:%s" % (loc_str, g)
+                posting['state'] = g.state
+                posting['city'] = g.city
+                posting['country'] = g.country
+            except (TypeError, AttributeError, KeyError, IndexError):
+                # traceback.print_exc(file=stderr)
+                pass
+        # date posted
+        try:  # try this first, but if we fail...
+            date_posted_p = soup.find('p', attrs=ZipRecruiterScraper._job_posting_p_date_posted_attrs)
+            # find first 'span'
+            date_posted_span = date_posted_p.find('span')
+            dt_text = re.sub(r"[Pp]osted", "", date_posted_span.text.text.lower()).strip()
+            posting.add_date_posted(safe_dt_parse(dt_text))
+        except AttributeError:
+            try:
+                # ... double-check that we have a 'posted today / this week / 12 hours ago / whatever'
+                locdiv = soup.find('div', attrs=ZipRecruiterScraper._job_posting_locdiv_attrs)
+                header_div = locdiv.parent
+                date_p = header_div.findAll('p')[-1]
+                date_span = date_p.find('span')
+                date_span_text = date_span.text.lower()
+                if "posted" in date_span_text:
+                    # and if so, take appropriate action
+                    dt_text = re.sub(r"posted", "", date_span_text).strip()
+                    posting.add_date_posted(safe_dt_parse(dt_text))
+                else:
+                    # print >> stderr, "don't have a date found at url:%s" % job_link
+                    pass
+            except (AttributeError, IndexError):
+                traceback.print_exc(file=stderr)
+                pass
+        # description
+        try:
+            description_div = soup.find('div', attrs=ZipRecruiterScraper._job_posting_div_description_attrs)
+            posting.add_description(PostingScraper._encode_unicode(description_div.text))
+        except AttributeError:
+            # traceback.print_exc(file=stderr)
+            pass
+        return posting
+
 
 if __name__ == "__main__":
     scrapers = list()
-    scrapers.append(CraigslistScraper(base='baltimore'))
-    scrapers.append(UpworkScraper())
+    # scrapers.append(CraigslistScraper(base_url="http://baltimore.craigslist.org"))
+    # scrapers.append(UpworkScraper())
     # scrapers.append(GuruScraper())
     # scrapers.append(IndeedScraper("baltimore"))
     # scrapers.append(SimplyhiredScraper("Baltimore, MD"))
-
-    # scrapers.append(GlassdoorScraper())
-    # scrapers.append(ElanceScraper())
+    scrapers.append(ZipRecruiterScraper(location="baltimore"))
     keys_to_verify = ['source', 'unique_id', 'title', 'date_posted', 'description']
     for scraper in scrapers:
         print scraper.__class__
-        for p in scraper.get_postings("computer thing", pages=1):
+        for p in scraper.get_postings("computer thing", pages=50):
             for k, v in p.items():
                 print k, " => ", v
             for k in keys_to_verify:
