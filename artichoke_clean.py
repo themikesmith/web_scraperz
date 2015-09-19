@@ -101,6 +101,8 @@ class CraigslistScraper(PostingScraper):
     def __init__(self, base_url):
         # if base == 'baltimore':
         #     base = 'http://baltimore.craigslist.org'
+        if base_url is None or not base_url:
+            raise ValueError("A base url must be specified for a Craigslist Scraper.")
         PostingScraper.__init__(self, base_url)
 
     def _get_info_from_clp_posting(self, url):
