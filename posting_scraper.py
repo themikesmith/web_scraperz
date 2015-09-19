@@ -26,7 +26,7 @@ class PostingScraper:
 
     @staticmethod
     def _encode_unicode(s):
-        return s.encode('utf8')
+        return unicode(s, "utf8")
 
     @staticmethod
     def _remove_none_from_things(provided_list):
