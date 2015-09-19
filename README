@@ -1,0 +1,17 @@
+Feels hackish, but things like dryscrape, PyQT, and PhantomJS had too many dependencies, or too many issues to quickly get started and finished.
+ 
+req's: firefox  --- maybe this is installed with selenium?
+
+To run under a virtual environment:
+virtualenv .
+source bin/activate
+
+Otherwise to simply install requirements:
+pip install -r requirements.txt
+
+Note: if you run into an installation issue "Failed building wheel for readline"
+then install libncurses5 dev.
+
+sudo apt-get install libncurses5-dev
+
+See http://stackoverflow.com/a/14149244
