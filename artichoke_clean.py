@@ -80,14 +80,14 @@ class PostingScraper:
     def get_postings(self, query, pages=1):
         """
         Gather results, given a query and the number of pages of results desired.
-        A posting is a dict with the following attributes:
-            - url
-            - price
-            - location: state, city, country
-            - text
+        A posting is a dict with the following minimum attributes:
+            - text description
+            - source
             - unique id
-            - date created
-        Will be different for each website (duh)
+            - title
+            - date posted
+            - url
+        Postings from websites may contain more information, e.g., price or location
         :param query: query to use on the site
         :param pages: number of pages of results desired
         :return: a list of postings, each of which is a dict.
@@ -151,9 +151,10 @@ class CraigslistScraper(PostingScraper):
                     posts += [self._clean_post_url(a['href']) for a in soup.findAll('a', {'data-id': re.compile('\d+')})]
                 except KeyError:  # handle if no href
                     pass
-            return list(set([self._get_info_from_clp_posting(post) for post in posts]))
+            return list(set(PostingScraper._remove_none_from_things(
+                [self._get_info_from_clp_posting(post) for post in posts])))
         except Exception:
-            # traceback.print_exc(file=stderr)
+            traceback.print_exc(file=stderr)
             return []
 
 
@@ -250,10 +251,11 @@ class UpworkScraper(PostingScraper):
                         posts.append(self._clean_post_url(url['href']))
                     except (TypeError, KeyError):
                         pass
-            return list(set(map(self._get_info_from_upwork_posting,
-                       map(PostingScraper._get_cleaned_soup_from_url, posts))))
+            return list(set(PostingScraper._remove_none_from_things(
+                map(self._get_info_from_upwork_posting,
+                    map(PostingScraper._get_cleaned_soup_from_url, posts)))))
         except Exception:
-            # traceback.print_exc(file=stderr)
+            traceback.print_exc(file=stderr)
             return []
 
 
@@ -347,11 +349,13 @@ class GuruScraper(PostingScraper):
                         h2 = li.find('h2', attrs=GuruScraper._job_search_results_header_attrs)
                         a = h2.find('a')
                         postings.append(self._clean_post_url(a['href']))
-                except (AttributeError, TypeError, KeyError):  # also handle misc errors, want to gracefully return postings we already have
+                except (AttributeError, TypeError, KeyError):
+                    # also handle misc errors, want to gracefully return postings we already have
                     # traceback.print_exc(file=stderr)
                     pass
-            return list(set(map(self._get_info_from_guru_job_page_soup,
-                        map(PostingScraper._get_cleaned_soup_from_url, postings))))
+            return list(set(PostingScraper._remove_none_from_things(
+                map(self._get_info_from_guru_job_page_soup,
+                    map(PostingScraper._get_cleaned_soup_from_url, postings)))))
         except Exception:
             traceback.print_exc(file=stderr)
             return []
@@ -439,10 +443,12 @@ class IndeedScraper(PostingScraper):
                 try:
                     postings.extend(job_results_td.findAll('div', IndeedScraper._job_row_result_div_attrs))
                 except AttributeError:
+                    # traceback.print_exc(file=stderr)
                     pass
-            return list(set(map(self._get_info_from_indeed_result, postings)))
+            return list(set(PostingScraper._remove_none_from_things(
+                map(self._get_info_from_indeed_result, postings))))
         except Exception:
-            # traceback.print_exc(file=stderr)
+            traceback.print_exc(file=stderr)
             return []
 
 
@@ -549,8 +555,10 @@ class SimplyhiredScraper(PostingScraper):
                 try:
                     postings.extend(job_results_list_div.findAll('div', SimplyhiredScraper._job_result_div_attrs))
                 except AttributeError:
+                    # traceback.print_exc(file=stderr)
                     pass
-            return list(set(map(self._get_info_from_simplyhired_result, postings)))
+            return list(set(PostingScraper._remove_none_from_things(
+                map(self._get_info_from_simplyhired_result, postings))))
         except Exception:
             traceback.print_exc(file=stderr)
             return []
@@ -589,6 +597,7 @@ class ZipRecruiterScraper(PostingScraper):
                     postings.extend(map(lambda x: x['href'],
                                         job_results_list_div.findAll('a', ZipRecruiterScraper._job_result_link_attrs)))
                 except AttributeError:
+                    # traceback.print_exc(file=stderr)
                     pass
             # note that we could return None if we go to an external url here
             postings = map(self._get_info_from_ziprecruiter_result, postings)
@@ -598,7 +607,7 @@ class ZipRecruiterScraper(PostingScraper):
             return []
 
     def _get_info_from_ziprecruiter_result(self, job_link):
-        print >> stderr, job_link
+        # print >> stderr, job_link
         soup = PostingScraper._get_cleaned_soup_from_url(job_link)
         if not len(soup):
             # print >> stderr, "returning none, soup false, link:%s" % job_link
@@ -662,30 +671,34 @@ class ZipRecruiterScraper(PostingScraper):
                 # traceback.print_exc(file=stderr)
                 pass
         # date posted
-        try:  # try this first, but if we fail...
-            date_posted_p = soup.find('p', attrs=ZipRecruiterScraper._job_posting_p_date_posted_attrs)
-            # find first 'span'
-            date_posted_span = date_posted_p.find('span')
-            dt_text = re.sub(r"[Pp]osted", "", date_posted_span.text.text.lower()).strip()
-            posting.add_date_posted(safe_dt_parse(dt_text))
-        except AttributeError:
-            try:
-                # ... double-check that we have a 'posted today / this week / 12 hours ago / whatever'
-                locdiv = soup.find('div', attrs=ZipRecruiterScraper._job_posting_locdiv_attrs)
-                header_div = locdiv.parent
-                date_p = header_div.findAll('p')[-1]
-                date_span = date_p.find('span')
-                date_span_text = date_span.text.lower()
-                if "posted" in date_span_text:
-                    # and if so, take appropriate action
-                    dt_text = re.sub(r"posted", "", date_span_text).strip()
-                    posting.add_date_posted(safe_dt_parse(dt_text))
-                else:
-                    # print >> stderr, "don't have a date found at url:%s" % job_link
+        try:
+            try:  # try this first, but if we fail...
+                date_posted_p = soup.find('p', attrs=ZipRecruiterScraper._job_posting_p_date_posted_attrs)
+                # find first 'span'
+                date_posted_span = date_posted_p.find('span')
+                dt_text = re.sub(r"[Pp]osted", "", date_posted_span.text.lower()).strip()
+                posting.add_date_posted(safe_dt_parse(dt_text))
+            except AttributeError:
+                try:
+                    # ... double-check that we have a 'posted today / this week / 12 hours ago / whatever'
+                    locdiv = soup.find('div', attrs=ZipRecruiterScraper._job_posting_locdiv_attrs)
+                    header_div = locdiv.parent
+                    date_p = header_div.findAll('p')[-1]
+                    date_span = date_p.find('span')
+                    date_span_text = date_span.text.lower()
+                    if "posted" in date_span_text:
+                        # and if so, take appropriate action
+                        dt_text = re.sub(r"posted", "", date_span_text).strip()
+                        posting.add_date_posted(safe_dt_parse(dt_text))
+                    else:
+                        # print >> stderr, "don't have a date found at url:%s" % job_link
+                        pass
+                except (AttributeError, IndexError):
+                    # traceback.print_exc(file=stderr)
                     pass
-            except (AttributeError, IndexError):
-                traceback.print_exc(file=stderr)
-                pass
+        except ValueError as e:
+            print >> stderr, "error parsing date posted string at url:%s" % job_link
+            pass
         # description
         try:
             description_div = soup.find('div', attrs=ZipRecruiterScraper._job_posting_div_description_attrs)

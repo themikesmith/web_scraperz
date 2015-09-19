@@ -13,7 +13,12 @@ _re_time_ago = re.compile(r"(\d+)\+? (year|month|week|day|hour|minute|second|mic
 def safe_dt_parse(dt):
     """
     Safe wrapper for dt parser, deals with weird TZ bug,
-    and also handles 'now', 'today', 'this week/month/year', and X days/months/seconds ago, etc
+    and also handles:
+     'now',
+     'today',
+     'yesterday',
+     'this week/month/year',
+     and X days/months/seconds ago, etc
     :param dt:
     :return:
     """
@@ -24,11 +29,13 @@ def safe_dt_parse(dt):
         return datetime.now()
     if s_dt.lower() == 'today':
         return datetime.today()
+    if s_dt.lower() == 'yesterday':
+        return datetime.today() - timedelta(days=1)
     if s_dt.lower() == "this week":
         return datetime.today() - timedelta(days=7)
     if s_dt.lower() == "this month":  # hack, subtract 28 days for a month
         return datetime.today() - timedelta(days=28)
-    if s_dt.lower() == "this year":
+    if s_dt.lower() == "this year":  # similar hack as with 'this month'
         return datetime.today() - timedelta(days=365)
     # handle 'X days/months/seconds ago', etc
     m = _re_time_ago.match(s_dt)
@@ -41,7 +48,7 @@ def safe_dt_parse(dt):
         d = dt_parser.parse(dt)
     except (AttributeError, ValueError) as e:
         # if dt can't be 'read', or if unknown string format
-        print >> stderr, s_dt
+        print >> stderr, "safe dt parser received:", s_dt
         raise e
     try:
         # print >> stderr, "verifying tz:", d

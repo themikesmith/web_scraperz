@@ -1,7 +1,7 @@
-__author__ = 'mcs'
-
 from fuzzywuzzy import fuzz
 from collections import MutableMapping
+from sys import stderr
+__author__ = 'mcs'
 
 
 class Posting(MutableMapping):
@@ -52,26 +52,32 @@ class Posting(MutableMapping):
         return dict.__str__(self.data)
 
     def __hash__(self):
-        if Posting.DESCRIPTION in self:
-            return self[Posting.DESCRIPTION].__hash__()
+        if Posting.DESCRIPTION in self and Posting.SOURCE in self:
+            s = self[Posting.DESCRIPTION] + self[Posting.SOURCE]
+            return s.__hash__()
         elif Posting.ID in self and Posting.SOURCE in self:
             s = self[Posting.ID] + self[Posting.SOURCE]
             return s.__hash__()
         else:
-            raise ValueError("Error when hashing: posting doesn't have description, nor id + source\n\n%s" % self)
+            raise ValueError("Error when hashing: posting doesn't have description and source"
+                             ", nor id + source\n%s" % self)
 
     def __eq__(self, other):
-        if Posting.DESCRIPTION in self and Posting.DESCRIPTION in other:
+        if Posting.DESCRIPTION in self and Posting.DESCRIPTION in other \
+                and Posting.SOURCE in self and Posting.SOURCE in other:
             if self.use_fuzzy:
-                return fuzz.ratio(self[Posting.DESCRIPTION], other[Posting.DESCRIPTION]) >= Posting.FUZZY_THRESHOLD
-            else:
-                return self[Posting.DESCRIPTION].__hash__() == other[Posting.DESCRIPTION].__hash__()
+                result = fuzz.ratio(self[Posting.DESCRIPTION], other[Posting.DESCRIPTION]) >= Posting.FUZZY_THRESHOLD
+                return result and self[Posting.SOURCE].__hash__() == other[Posting.SOURCE].__hash__()
+            else:  # calling hash in this instance will default to using description and source
+                return self.__hash__() == other.__hash__()
         elif Posting.ID in self and Posting.SOURCE in self and Posting.ID in other and Posting.SOURCE in other:
             s = self[Posting.ID] + self[Posting.SOURCE]
             o = other[Posting.ID] + other[Posting.SOURCE]
+            # can't call hash on the objects in this instance because one could have a description
             return s.__hash__() == o.__hash__()
         else:
-            raise ValueError("Error in __eq__: posting doesn't have description, nor id + source")
+            raise ValueError("Error in __eq__: posting doesn't have description and source,"
+                             " nor id + source\nself:%s\nother:%s" % (self, other))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -128,6 +134,10 @@ if __name__ == "__main__":
     full_match_fuzzy.add_description("This is a super test description")
     full_match_fuzzy.add_id("11")
     full_match_fuzzy.add_source("craigslist")
+    full_match_notsource = Posting()
+    full_match_notsource.add_description("This is a test description")
+    full_match_notsource.add_id("11")
+    full_match_notsource.add_source("indeed")
     d = {Posting.ID: "123"}
     add_dict = Posting(d)
     assert str(add_dict) == str(d)
@@ -153,9 +163,10 @@ if __name__ == "__main__":
     except ValueError:
         assert True
     try:
-        assert partial_description == full_match
-    except ValueError:
+        assert partial_description != full_match
         assert False
+    except ValueError:
+        assert True
     try:
         assert partial_id_source == full_match
     except ValueError:
@@ -168,3 +179,4 @@ if __name__ == "__main__":
         assert full_match_fuzzy == full_match
     except ValueError:
         assert False
+    assert full_match != full_match_notsource
