@@ -701,8 +701,8 @@ if __name__ == "__main__":
     # scrapers.append(CraigslistScraper(base_url="http://baltimore.craigslist.org"))
     # scrapers.append(UpworkScraper())
     # scrapers.append(GuruScraper())
-    # scrapers.append(IndeedScraper("baltimore"))
-    # scrapers.append(SimplyhiredScraper("Baltimore, MD"))
+    # scrapers.append(IndeedScraper(location="baltimore"))
+    # scrapers.append(SimplyhiredScraper(location="Baltimore, MD"))
     scrapers.append(ZipRecruiterScraper(location="baltimore"))
     keys_to_verify = ['source', 'unique_id', 'title', 'date_posted', 'description']
     for scraper in scrapers:
